@@ -8,6 +8,8 @@ import com.sun.jdi.Location
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
+import org.jetbrains.plugins.setIp.injectionUtils.*
+import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
 import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
 import org.jetbrains.plugins.setIp.injectionUtils.getTargetLineInfo
 import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
@@ -15,7 +17,7 @@ import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
 
 internal fun debuggerJump(
-        selectedLine: Int,
+        targetLineInfo: LocalVariableAnalyzeResult,
         declaredType: ReferenceType,
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
@@ -25,26 +27,11 @@ internal fun debuggerJump(
 
     val method = currentFrame.location().method()
 
-    val targetLineInfo = getTargetLineInfo(
-        ownerTypeName = declaredType.name(),
-        targetMethod = method.methodName,
-        klass = originalClassFile,
-        line = selectedLine
-    )?: return unitWithLog("Failed to get target line info")
-
-    if (!targetLineInfo.isSafeTarget) {
-        return
-//        val dialog = MessageDialog(null, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 0, null, true)
-//        dialog.show()
-//        if (dialog.exitCode == 1) return
-    }
-
     val (classToRedefine, stopLine) = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
             targetMethod = method.methodName,
             isInstanceMethod = !method.isStatic,
             klass = originalClassFile,
-            line = selectedLine,
             commonTypeResolver = commonTypeResolver
     ) ?: return unitWithLog("Failed to redefine class")
 
@@ -67,7 +54,7 @@ internal fun debuggerJump(
     }?: return unitWithLog("Cannot find first stop location")
 
     val targetLocation = declaredType.allLineLocations().firstOrNull {
-        it.lineNumber() == selectedLine
+        it.lineNumber() == targetLineInfo.line
     } ?: return unitWithLog("Cannot find target location")
 
     fun StackFrameProxyImpl.trySetValue(name: String, value: Value) =

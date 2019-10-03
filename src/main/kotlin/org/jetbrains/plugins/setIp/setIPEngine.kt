@@ -130,7 +130,7 @@ internal fun tryGetLinesToJump(
 internal fun tryGetLinesToJumpImpl(
         session: DebuggerSession,
         project: Project
-): Pair<Set<Int>, String?>? {
+): Pair<List<LocalVariableAnalyzeResult>, String?>? {
 
     val process = session.process
 
@@ -158,14 +158,15 @@ internal fun tryGetLinesToJumpImpl(
 
     val isRecursive = checkIsTopMethodRecursive(frame.location(), threadProxy)
 
-    return if (isRecursive) result.first.min()?.let { setOf(it) to result.second } else result
+    return if (isRecursive) {
+        result.first.firstOrNull { it.isFirstLine }?.let { listOf(it) to result.second }
+    } else result
 }
 
 internal fun tryJumpToSelectedLine(
     session: DebuggerSession,
-    selectedLine: Int,
-    availableGotoLines: Set<Int>,
     project: Project,
+    targetLineInfo: LocalVariableAnalyzeResult,
     commonTypeResolver: CommonTypeResolver
 ) = runInDebuggerThread(session) {
     session.process.let {
@@ -176,9 +177,8 @@ internal fun tryJumpToSelectedLine(
 
         val result = tryJumpToSelectedLineImpl(
                 session = session,
-                selectedLine = selectedLine,
-                availableGotoLines = availableGotoLines,
                 project = project,
+                targetLineInfo = targetLineInfo,
                 commonTypeResolver = commonTypeResolver
         )
 
@@ -191,9 +191,8 @@ internal fun tryJumpToSelectedLine(
 
 private fun tryJumpToSelectedLineImpl(
     session: DebuggerSession,
-    selectedLine: Int,
-    availableGotoLines: Set<Int>,
     project: Project,
+    targetLineInfo: LocalVariableAnalyzeResult,
     commonTypeResolver: CommonTypeResolver
 ): Boolean {
 
@@ -207,20 +206,17 @@ private fun tryJumpToSelectedLineImpl(
 
     val location = frame.location()
 
-    if (location.lineNumber() == selectedLine) return falseWithLog("Current line selected")
+    if (location.lineNumber() == targetLineInfo.line) return falseWithLog("Current line selected")
 
     val classType = location.declaringType()
     val classFile = tryLocateClassFile(classType, project) ?: return falseWithLog("Cannot find class file")
 
-    //Check the min is really the first line of the method!
-    val justDropTheFrame = availableGotoLines.min() == selectedLine
-
-    if (justDropTheFrame) {
+    if (targetLineInfo.isFirstLine) {
         threadProxy.jumpByFrameDrop()
     } else {
         val classFileContent = Files.readAllBytes(classFile.toPath())
         debuggerJump(
-                selectedLine = selectedLine,
+                targetLineInfo = targetLineInfo,
                 declaredType = classType,
                 originalClassFile = classFileContent,
                 threadProxy = threadProxy,

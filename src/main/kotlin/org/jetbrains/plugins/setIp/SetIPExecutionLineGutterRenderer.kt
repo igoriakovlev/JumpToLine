@@ -11,10 +11,12 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.markup.GutterDraggableObject
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.xdebugger.impl.XDebugSessionImpl
+import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
 import java.awt.Cursor
 import java.awt.dnd.DragSource
 import javax.swing.Icon
@@ -51,16 +53,24 @@ internal class SetIPExecutionLineGutterRenderer(
 
                 if (extension != "java" && extension != "kt") return false
 
-                if (!canSet(line)) return false
+                val selected =
+                        localAnalysisByRenderLine(line) ?: return false
 
-                return jumpLines?.let {
-                    tryJumpToSelectedLine(line, it)
-                } ?: false
+                if (!selected.isSafeLine) {
+                    val dialog = MessageDialog(null, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 0, null, true)
+                    dialog.show()
+                    if (dialog.exitCode == 1) return false
+                }
 
+                return tryJumpToSelectedLine(selected)
             }
 
-            override fun getCursor(line: Int, actionId: Int): Cursor =
-                if (canSet(line)) DragSource.DefaultMoveDrop else DragSource.DefaultMoveNoDrop
+            override fun getCursor(line: Int, actionId: Int): Cursor {
+                val selected =
+                        localAnalysisByRenderLine(line) ?: return DragSource.DefaultMoveNoDrop
+
+                return if (selected.isSafeLine) DragSource.DefaultMoveDrop else DragSource.DefaultLinkDrop
+            }
         }
     }
 
@@ -71,6 +81,9 @@ internal class SetIPExecutionLineGutterRenderer(
     private val canJump by lazy {
         checkCanJump(session, xsession)
     }
+
+    private fun localAnalysisByRenderLine(line: Int) =
+            jumpLines?.firstOrNull { it.line == line + 1 }
 
     private val jumpLines by lazy {
 
@@ -85,13 +98,12 @@ internal class SetIPExecutionLineGutterRenderer(
         jumpLines.first
     }
 
-    private fun tryJumpToSelectedLine(line: Int, lines: Set<Int>): Boolean {
+    private fun tryJumpToSelectedLine(analyzeResult: LocalVariableAnalyzeResult): Boolean {
 
         val result = tryJumpToSelectedLine(
                 session = session,
-                selectedLine = line + 1,
-                availableGotoLines = lines,
                 project = project,
+                targetLineInfo = analyzeResult,
                 commonTypeResolver = commonTypeResolver
         )
 
@@ -109,6 +121,6 @@ internal class SetIPExecutionLineGutterRenderer(
     }
 
     private fun canSet(line: Int): Boolean =
-            jumpLines?.contains(line + 1) ?: false
+            jumpLines?.any { it.line == line + 1 } ?: false
 }
 

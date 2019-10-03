@@ -34,7 +34,7 @@ fun sss() {
     val name = MethodName("invoke", "(Ljava/lang/Object;)Ljava/lang/Object;", "(TK;)TV;")
     val type = "org/jetbrains/kotlin/storage/LockBasedStorageManager\$MapBasedMemoizedFunction"
     val stackCalculator = StackEmptyLinesAnalyzer(type, name)
-    val localCalculator = LocalVariableAnalyzer(type, name, 447)
+    val localCalculator = LocalVariableAnalyzer(type, name)
     classReaderToWrite.accept(localCalculator, ClassReader.EXPAND_FRAMES)
     classReaderToWrite.accept(stackCalculator, ClassReader.EXPAND_FRAMES)
 }

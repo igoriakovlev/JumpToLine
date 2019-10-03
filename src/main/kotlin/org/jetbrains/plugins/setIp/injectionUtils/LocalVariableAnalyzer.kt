@@ -3,30 +3,36 @@ package org.jetbrains.plugins.setIp.injectionUtils
 import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
 import org.jetbrains.org.objectweb.asm.*
 
+internal typealias LocalsList = List<Pair<Type, Int>>
+
+internal data class LocalVariableAnalyzeResult(val line: Int, val locals: LocalsList, val isSafeLine: Boolean, val isFirstLine: Boolean)
+
 internal class LocalVariableAnalyzer(
         private val ownerTypeName: String,
-        private val methodName: MethodName,
-        private val targetLine: Int
+        private val methodName: MethodName
 ) : ClassVisitor6() {
+
+    private data class SemiResult(val locals: LocalsList, val label: Label, val isFirstLine: Boolean)
 
     private var methodVisited = false
     private var methodVisitedTwice = false
-    private var lineVisited = false
-    private var frameExpected = false
+    private var isFirstLine = true
 
-    private var result : List<Pair<Type, Int>>? = null
+    private val linesExpectedFromFrame = mutableSetOf<Int>()
+    private val semiResult = mutableMapOf<Int, SemiResult>()
 
     private val labels = mutableListOf<Label>()
     private val localVariablesWithRanges = mutableListOf<Pair<Label, Label>>()
-    private var targetLabel: Label? = null
 
-    val visibleVariables by lazy {
+    private fun getVariablesCountForLabel(targetLabel: Label) : Int {
 
-        targetLabel ?: return@lazy null
-        if (labels.isEmpty()) return@lazy null
-        if (localVariablesWithRanges.isEmpty()) return@lazy 0
+        if (labels.isEmpty()) return 0
+        if (localVariablesWithRanges.isEmpty()) return 0
 
         var afterMark = false
+
+        val copiedRanges = mutableListOf<Pair<Label, Label>>()
+                .also { it.addAll(localVariablesWithRanges) }
 
         for (currentLabel in labels) {
             if (currentLabel == targetLabel) {
@@ -35,18 +41,26 @@ internal class LocalVariableAnalyzer(
             }
 
             if (afterMark) {
-                localVariablesWithRanges.removeIf { it.first == currentLabel }
+                copiedRanges.removeIf { it.first == currentLabel }
             } else {
-                localVariablesWithRanges.removeIf { it.second == currentLabel }
+                copiedRanges.removeIf { it.second == currentLabel }
             }
         }
 
-        localVariablesWithRanges.count()
+        return copiedRanges.count()
     }
 
-    val defaultValueAndName get() : List<Pair<Type, Int>>? =
-        (if (!methodVisited || methodVisitedTwice || !lineVisited) null else result)
-                ?: nullWithLog("Cannot get locals because methodVisited=$methodVisited and methodVisitedTwice=$methodVisitedTwice and lineVisited=$lineVisited for $methodName : $targetLine")
+    val analyzeResult: List<LocalVariableAnalyzeResult>? get() {
+
+        if (!methodVisited || methodVisitedTwice) return null
+                ?: nullWithLog("Cannot get locals because methodVisited=$methodVisited and methodVisitedTwice=$methodVisitedTwice for $methodName")
+
+        return semiResult.map {
+            val visiblesCount = getVariablesCountForLabel(it.value.label)
+            val isSafe = visiblesCount == it.value.locals.size
+            LocalVariableAnalyzeResult(it.key, it.value.locals, isSafe, it.value.isFirstLine)
+        }
+    }
 
     private inner class LocalsOnLineRetrieverVisitor : MethodVisitor6() {
 
@@ -73,8 +87,6 @@ internal class LocalVariableAnalyzer(
             super.visitLabel(label)
 
             labels.add(label)
-
-
         }
 
         override fun visitFrame(type: Int, numLocal: Int, local: Array<out Any?>?, numStack: Int, stack: Array<out Any?>?) {
@@ -83,8 +95,7 @@ internal class LocalVariableAnalyzer(
 
             if (local === null) return
 
-            if (!frameExpected) return
-            frameExpected = false
+            if (linesExpectedFromFrame.isEmpty()) return
 
             val resultBuilder = mutableListOf<Pair<Type, Int>>()
 
@@ -92,28 +103,32 @@ internal class LocalVariableAnalyzer(
                 val convertedType = local[index]?.convertToType() ?: continue
                 resultBuilder.add(convertedType to index)
             }
-            targetLabel = labels.last()
-            result = resultBuilder
+
+            linesExpectedFromFrame.forEach {
+                semiResult[it] = SemiResult(resultBuilder, labels.last(), isFirstLine)
+                isFirstLine = false
+            }
+
+            linesExpectedFromFrame.clear()
         }
 
         override fun visitLineNumber(line: Int, start: Label) {
 
             super.visitLineNumber(line, start)
 
-            if (targetLine != line) return
-            if (lineVisited) return
-
-            lineVisited = true
+            if (semiResult.containsKey(line)) return
+            if (linesExpectedFromFrame.contains(line)) return
 
             val locals = analyzer!!.locals
 
             if (locals !== null) {
-                result = locals.mapIndexedNotNull { index, type ->
+                val result = locals.mapIndexedNotNull { index, type ->
                     type.convertToType()?.let { it to index }
                 }
-                targetLabel = labels.last()
+                semiResult[line] = SemiResult(result, labels.last(), isFirstLine)
+                isFirstLine = false
             } else {
-                frameExpected = true
+                linesExpectedFromFrame.add(line)
             }
         }
     }

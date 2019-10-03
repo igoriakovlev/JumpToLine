@@ -29,17 +29,27 @@ internal fun MethodName.matches(name: String?, desc: String?, signature: String?
     return false
 }
 
-internal fun getAvailableGotoLines(ownerTypeName: String, targetMethod: MethodName, klass: ByteArray): Pair<Set<Int>, String?>? {
+internal fun getAvailableGotoLines(ownerTypeName: String, targetMethod: MethodName, klass: ByteArray): Pair<List<LocalVariableAnalyzeResult>, String?>? {
     //sss()
     val classReader = ClassReader(klass)
-    val analyzer = StackEmptyLinesAnalyzer(ownerTypeName.slashSpacedName, targetMethod)
-    classReader.accept(analyzer, EXPAND_FRAMES)
-    return analyzer.validLines?.let { it to analyzer.sourceDebugLine }
+
+    val stackAnalyzer = StackEmptyLinesAnalyzer(ownerTypeName.slashSpacedName, targetMethod)
+
+    classReader.accept(stackAnalyzer, EXPAND_FRAMES)
+    val stackAnalyzerResult = stackAnalyzer.validLines ?: return null
+
+    val localsAnalyzer = LocalVariableAnalyzer(ownerTypeName, targetMethod)
+    classReader.accept(localsAnalyzer, EXPAND_FRAMES)
+
+    val localsAnalyzerResult = localsAnalyzer.analyzeResult ?: return null
+
+    val suitableResults =
+            localsAnalyzerResult.filter { stackAnalyzerResult.contains(it.line) }
+
+    return suitableResults to stackAnalyzer.sourceDebugLine
 }
 
 internal data class ClassAndFirstLine(val klass: ByteArray, val stopLineNumber: Int)
-
-internal data class TargetLineInfo(val locals: List<Pair<Type, Int>>, val isSafeTarget: Boolean)
 
 internal class ClassWriterWithTypeResolver(
         private val commonTypeResolver: CommonTypeResolver,
@@ -61,36 +71,25 @@ internal class ClassWriterWithTypeResolver(
     }
 }
 
-
-
 internal fun getTargetLineInfo(
         ownerTypeName: String,
         targetMethod: MethodName,
-        klass: ByteArray,
-        line: Int
-): TargetLineInfo? {
+        klass: ByteArray
+): List<LocalVariableAnalyzeResult>? {
 
     val classReaderToWrite = ClassReader(klass)
 
-    val localCalculator = LocalVariableAnalyzer(ownerTypeName.slashSpacedName, targetMethod, line)
+    val localCalculator = LocalVariableAnalyzer(ownerTypeName.slashSpacedName, targetMethod)
     classReaderToWrite.accept(localCalculator, EXPAND_FRAMES)
 
-    val localsFound =
-            localCalculator.defaultValueAndName ?: return nullWithLog("Cannot get locals")
-
-    val visibleVariablesCount = localCalculator.visibleVariables ?: return nullWithLog("Cannot get visibles")
-
-    val isSafeTarget = visibleVariablesCount == localsFound.size
-
-    return TargetLineInfo(localsFound, isSafeTarget)
+    return localCalculator.analyzeResult
 }
 
 internal fun updateClassWithGotoLinePrefix(
-        targetLineInfo: TargetLineInfo,
+        targetLineInfo: LocalVariableAnalyzeResult,
         targetMethod: MethodName,
         isInstanceMethod: Boolean,
         klass: ByteArray,
-        line: Int,
         commonTypeResolver: CommonTypeResolver
 ): ClassAndFirstLine? {
 
@@ -103,7 +102,7 @@ internal fun updateClassWithGotoLinePrefix(
 
     val transformer = Transformer(
             methodName = targetMethod,
-            line = line,
+            line = targetLineInfo.line,
             locals = targetLineInfo.locals,
             isInstanceMethod = isInstanceMethod,
             visitor = writer
