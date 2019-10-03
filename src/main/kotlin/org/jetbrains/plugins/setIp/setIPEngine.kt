@@ -14,35 +14,13 @@ import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.compiler.CompilerPaths
-import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.Location
 import com.sun.jdi.Method
-import com.sun.jdi.ReferenceType
 import org.jetbrains.plugins.setIp.injectionUtils.*
-import java.io.File
-import java.nio.file.Files
-
-
-private fun tryLocateClassFile(type: ReferenceType, project: Project): File? {
-    val className = type.name().replace('.', '/') + ".class"
-
-    val outputPaths = ModuleManager.getInstance(project).modules.map {
-        CompilerPaths.getModuleOutputDirectory(it, false)
-    }.mapNotNull { it?.path }.toSet()
-
-    return outputPaths.mapNotNull { path ->
-        val directory = File(path)
-        if (!directory.exists() || !directory.isDirectory) return@mapNotNull null
-
-        val file = File(directory, className)
-
-        if (file.isFile && file.canRead()) file else null
-    }.firstOrNull()
-}
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T): T {
     var result: T? = null
@@ -120,17 +98,26 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
     } > 1
 }
 
+internal sealed class GetLinesToJumpResult
+internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val sourceDebugLine: String?, val classFile: ByteArray) : GetLinesToJumpResult()
+internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
+internal object UnknownErrorResult : GetLinesToJumpResult()
+
 internal fun tryGetLinesToJump(
         session: DebuggerSession,
-        project: Project
-) = runInDebuggerThread(session) {
-    tryGetLinesToJumpImpl(session, project)
+        project: Project,
+        file: VirtualFile,
+        overridedFileContent: ByteArray? = null
+): GetLinesToJumpResult = runInDebuggerThread(session) {
+    tryGetLinesToJumpImpl(session, project, file, overridedFileContent) ?: UnknownErrorResult
 }
 
-internal fun tryGetLinesToJumpImpl(
+private fun tryGetLinesToJumpImpl(
         session: DebuggerSession,
-        project: Project
-): Pair<List<LocalVariableAnalyzeResult>, String?>? {
+        project: Project,
+        virtualFile: VirtualFile,
+        overrideFileContent: ByteArray? = null
+): GetLinesToJumpResult? {
 
     val process = session.process
 
@@ -146,27 +133,33 @@ internal fun tryGetLinesToJumpImpl(
 
     val classType = location.declaringType()
 
-    val classFile = tryLocateClassFile(classType, project) ?: return nullWithLog("Cannot get class file")
-
-    val classFileContent = Files.readAllBytes(classFile.toPath())
+    val classFile = overrideFileContent ?: tryLocateClassFile(project, classType.name(), virtualFile)
+    classFile ?: run {
+        unitWithLog("Cannot get class file for ${classType.name()}")
+        return ClassNotFoundErrorResult
+    }
 
     val result = getAvailableGotoLines(
             ownerTypeName = classType.name(),
             targetMethod = location.method().methodName,
-            klass = classFileContent
+            klass = classFile
     ) ?: return nullWithLog("Cannot get available goto lines")
 
     val isRecursive = checkIsTopMethodRecursive(frame.location(), threadProxy)
 
-    return if (isRecursive) {
-        result.first.firstOrNull { it.isFirstLine }?.let { listOf(it) to result.second }
-    } else result
+    val availableLines =
+            if (isRecursive) result.first.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result.first
+
+    availableLines?: return null
+
+    return JumpLinesInfo(availableLines, result.second, classFile)
 }
 
 internal fun tryJumpToSelectedLine(
     session: DebuggerSession,
     project: Project,
     targetLineInfo: LocalVariableAnalyzeResult,
+    classFile: ByteArray,
     commonTypeResolver: CommonTypeResolver
 ) = runInDebuggerThread(session) {
     session.process.let {
@@ -177,7 +170,7 @@ internal fun tryJumpToSelectedLine(
 
         val result = tryJumpToSelectedLineImpl(
                 session = session,
-                project = project,
+                classFile = classFile,
                 targetLineInfo = targetLineInfo,
                 commonTypeResolver = commonTypeResolver
         )
@@ -191,8 +184,8 @@ internal fun tryJumpToSelectedLine(
 
 private fun tryJumpToSelectedLineImpl(
     session: DebuggerSession,
-    project: Project,
     targetLineInfo: LocalVariableAnalyzeResult,
+    classFile: ByteArray,
     commonTypeResolver: CommonTypeResolver
 ): Boolean {
 
@@ -209,16 +202,14 @@ private fun tryJumpToSelectedLineImpl(
     if (location.lineNumber() == targetLineInfo.line) return falseWithLog("Current line selected")
 
     val classType = location.declaringType()
-    val classFile = tryLocateClassFile(classType, project) ?: return falseWithLog("Cannot find class file")
 
     if (targetLineInfo.isFirstLine) {
         threadProxy.jumpByFrameDrop()
     } else {
-        val classFileContent = Files.readAllBytes(classFile.toPath())
         debuggerJump(
                 targetLineInfo = targetLineInfo,
                 declaredType = classType,
-                originalClassFile = classFileContent,
+                originalClassFile = classFile,
                 threadProxy = threadProxy,
                 commonTypeResolver = commonTypeResolver
         )
