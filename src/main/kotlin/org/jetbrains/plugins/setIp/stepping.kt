@@ -3,11 +3,13 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessEvents
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
+import com.intellij.openapi.ui.messages.MessageDialog
 import com.sun.jdi.Location
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
 import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
+import org.jetbrains.plugins.setIp.injectionUtils.getTargetLineInfo
 import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
 import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
@@ -23,8 +25,22 @@ internal fun debuggerJump(
 
     val method = currentFrame.location().method()
 
-    val (classToRedefine, stopLine, localsFound) = updateClassWithGotoLinePrefix(
-            ownerTypeName = declaredType.name(),
+    val targetLineInfo = getTargetLineInfo(
+        ownerTypeName = declaredType.name(),
+        targetMethod = method.methodName,
+        klass = originalClassFile,
+        line = selectedLine
+    )?: return unitWithLog("Failed to get target line info")
+
+    if (!targetLineInfo.isSafeTarget) {
+        return
+//        val dialog = MessageDialog(null, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 0, null, true)
+//        dialog.show()
+//        if (dialog.exitCode == 1) return
+    }
+
+    val (classToRedefine, stopLine) = updateClassWithGotoLinePrefix(
+            targetLineInfo = targetLineInfo,
             targetMethod = method.methodName,
             isInstanceMethod = !method.isStatic,
             klass = originalClassFile,
@@ -71,8 +87,6 @@ internal fun debuggerJump(
 
                 jumpToLocationAndRun(targetLocation) {
                     machine.suspend()
-
-                    val sss = visibleVariables().size == localsFound
 
                     localVariables.forEach {
                         trySetValue(it.first, it.second)

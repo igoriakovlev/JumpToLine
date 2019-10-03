@@ -16,10 +16,37 @@ internal class LocalVariableAnalyzer(
 
     private var result : List<Pair<Type, Int>>? = null
 
+    private val labels = mutableListOf<Label>()
+    private val localVariablesWithRanges = mutableListOf<Pair<Label, Label>>()
+    private var targetLabel: Label? = null
+
+    val visibleVariables by lazy {
+
+        targetLabel ?: return@lazy null
+        if (labels.isEmpty()) return@lazy null
+        if (localVariablesWithRanges.isEmpty()) return@lazy 0
+
+        var afterMark = false
+
+        for (currentLabel in labels) {
+            if (currentLabel == targetLabel) {
+                afterMark = true
+                continue
+            }
+
+            if (afterMark) {
+                localVariablesWithRanges.removeIf { it.first == currentLabel }
+            } else {
+                localVariablesWithRanges.removeIf { it.second == currentLabel }
+            }
+        }
+
+        localVariablesWithRanges.count()
+    }
+
     val defaultValueAndName get() : List<Pair<Type, Int>>? =
         (if (!methodVisited || methodVisitedTwice || !lineVisited) null else result)
                 ?: nullWithLog("Cannot get locals because methodVisited=$methodVisited and methodVisitedTwice=$methodVisitedTwice and lineVisited=$lineVisited for $methodName : $targetLine")
-
 
     private inner class LocalsOnLineRetrieverVisitor : MethodVisitor6() {
 
@@ -34,6 +61,20 @@ internal class LocalVariableAnalyzer(
             Opcodes.TOP -> null
             Opcodes.NULL -> error { "Opcode does not supported NULL" }
             else -> error { "Opcode does not supported $this" }
+        }
+
+        override fun visitLocalVariable(name: String, descriptor: String?, signature: String?, start: Label, end: Label, index: Int) {
+            super.visitLocalVariable(name, descriptor, signature, start, end, index)
+            localVariablesWithRanges.add(start to end)
+        }
+
+        override fun visitLabel(label: Label) {
+
+            super.visitLabel(label)
+
+            labels.add(label)
+
+
         }
 
         override fun visitFrame(type: Int, numLocal: Int, local: Array<out Any?>?, numStack: Int, stack: Array<out Any?>?) {
@@ -51,11 +92,11 @@ internal class LocalVariableAnalyzer(
                 val convertedType = local[index]?.convertToType() ?: continue
                 resultBuilder.add(convertedType to index)
             }
-
+            targetLabel = labels.last()
             result = resultBuilder
         }
 
-        override fun visitLineNumber(line: Int, start: Label?) {
+        override fun visitLineNumber(line: Int, start: Label) {
 
             super.visitLineNumber(line, start)
 
@@ -70,6 +111,7 @@ internal class LocalVariableAnalyzer(
                 result = locals.mapIndexedNotNull { index, type ->
                     type.convertToType()?.let { it to index }
                 }
+                targetLabel = labels.last()
             } else {
                 frameExpected = true
             }

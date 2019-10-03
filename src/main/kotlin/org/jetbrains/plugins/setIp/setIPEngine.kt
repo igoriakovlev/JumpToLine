@@ -6,13 +6,11 @@
 package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.DebuggerManagerEx
-import com.intellij.debugger.engine.DebugProcessEvents
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
 import com.intellij.debugger.impl.DebuggerSession
-import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
 import com.intellij.openapi.application.ApplicationManager
@@ -21,13 +19,12 @@ import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.xdebugger.impl.XDebugSessionImpl
-import com.sun.jdi.*
-import com.sun.jdi.request.EventRequestManager
+import com.sun.jdi.Location
+import com.sun.jdi.Method
+import com.sun.jdi.ReferenceType
 import org.jetbrains.plugins.setIp.injectionUtils.*
 import java.io.File
 import java.nio.file.Files
-
-
 
 
 private fun tryLocateClassFile(type: ReferenceType, project: Project): File? {

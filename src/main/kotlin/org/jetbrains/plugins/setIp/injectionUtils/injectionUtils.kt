@@ -9,7 +9,6 @@ import org.jetbrains.org.objectweb.asm.*
 import org.jetbrains.org.objectweb.asm.ClassReader.EXPAND_FRAMES
 import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
 import org.jetbrains.plugins.setIp.CommonTypeResolver
-import org.jetbrains.plugins.setIp.parseKotlinSMAP
 
 internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)
 internal abstract class ClassVisitor6 : ClassVisitor(Opcodes.ASM6)
@@ -38,7 +37,9 @@ internal fun getAvailableGotoLines(ownerTypeName: String, targetMethod: MethodNa
     return analyzer.validLines?.let { it to analyzer.sourceDebugLine }
 }
 
-data class ClassAndFirstLine(val klass: ByteArray, val stopLineNumber: Int, val localsFound: Int)
+internal data class ClassAndFirstLine(val klass: ByteArray, val stopLineNumber: Int)
+
+internal data class TargetLineInfo(val locals: List<Pair<Type, Int>>, val isSafeTarget: Boolean)
 
 internal class ClassWriterWithTypeResolver(
         private val commonTypeResolver: CommonTypeResolver,
@@ -60,8 +61,32 @@ internal class ClassWriterWithTypeResolver(
     }
 }
 
-internal fun updateClassWithGotoLinePrefix(
+
+
+internal fun getTargetLineInfo(
         ownerTypeName: String,
+        targetMethod: MethodName,
+        klass: ByteArray,
+        line: Int
+): TargetLineInfo? {
+
+    val classReaderToWrite = ClassReader(klass)
+
+    val localCalculator = LocalVariableAnalyzer(ownerTypeName.slashSpacedName, targetMethod, line)
+    classReaderToWrite.accept(localCalculator, EXPAND_FRAMES)
+
+    val localsFound =
+            localCalculator.defaultValueAndName ?: return nullWithLog("Cannot get locals")
+
+    val visibleVariablesCount = localCalculator.visibleVariables ?: return nullWithLog("Cannot get visibles")
+
+    val isSafeTarget = visibleVariablesCount == localsFound.size
+
+    return TargetLineInfo(localsFound, isSafeTarget)
+}
+
+internal fun updateClassWithGotoLinePrefix(
+        targetLineInfo: TargetLineInfo,
         targetMethod: MethodName,
         isInstanceMethod: Boolean,
         klass: ByteArray,
@@ -76,21 +101,15 @@ internal fun updateClassWithGotoLinePrefix(
             flags = ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS
     )
 
-    val localCalculator = LocalVariableAnalyzer(ownerTypeName.slashSpacedName, targetMethod, line)
-    classReaderToWrite.accept(localCalculator, EXPAND_FRAMES)
-
-    val localsFound =
-            localCalculator.defaultValueAndName ?: return nullWithLog("Cannot get locals")
-
     val transformer = Transformer(
             methodName = targetMethod,
             line = line,
-            locals = localsFound,
+            locals = targetLineInfo.locals,
             isInstanceMethod = isInstanceMethod,
             visitor = writer
     )
 
     classReaderToWrite.accept(transformer, SKIP_FRAMES)
 
-    return if (transformer.transformationSuccess) ClassAndFirstLine(writer.toByteArray(), transformer.stopLineNumber, localsFound.size) else null
+    return if (transformer.transformationSuccess) ClassAndFirstLine(writer.toByteArray(), transformer.stopLineNumber) else null
 }
