@@ -86,7 +86,7 @@ internal class ClassWriterWithTypeResolver(
 internal fun updateClassWithGotoLinePrefix(
         targetLineInfo: LocalVariableAnalyzeResult,
         targetMethod: MethodName,
-        isInstanceMethod: Boolean,
+        argumentsCount: Int,
         klass: ByteArray,
         commonTypeResolver: CommonTypeResolver
 ): ClassAndFirstLine? {
@@ -102,7 +102,7 @@ internal fun updateClassWithGotoLinePrefix(
             methodName = targetMethod,
             line = targetLineInfo.javaLine,
             locals = targetLineInfo.locals,
-            isInstanceMethod = isInstanceMethod,
+            argumentsCount = argumentsCount,
             visitor = writer
     )
 

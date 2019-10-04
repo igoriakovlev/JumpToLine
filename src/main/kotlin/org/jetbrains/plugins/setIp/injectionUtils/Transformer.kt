@@ -6,7 +6,7 @@ internal class Transformer(
         private val methodName: MethodName,
         private val line: Int,
         private val locals: List<Pair<Type, Int>>,
-        private val isInstanceMethod: Boolean,
+        private val argumentsCount: Int,
         visitor: ClassVisitor
 ) : ClassVisitor(Opcodes.ASM6, visitor) {
 
@@ -56,7 +56,7 @@ internal class Transformer(
 
         private fun emitNullifyLocals() {
             for ((type, index) in locals) {
-                if (isInstanceMethod && index == 0) continue
+                if (index < argumentsCount) continue
 
                 if (type.defaultValue === null) {
                     super.visitInsn(Opcodes.ACONST_NULL)

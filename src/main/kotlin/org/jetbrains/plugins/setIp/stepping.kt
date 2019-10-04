@@ -12,7 +12,6 @@ import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
 import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
 import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
-
 internal fun debuggerJump(
         targetLineInfo: LocalVariableAnalyzeResult,
         declaredType: ReferenceType,
@@ -24,13 +23,16 @@ internal fun debuggerJump(
 
     val method = currentFrame.location().method()
 
+    val arguments = method.arguments()
+
+    val argumentsCount = arguments.size + if (!method.isStatic) 1 else 0
 
     //val sourceName = currentFrame.location().sourceName("Java")
 
     val (classToRedefine, stopLine) = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
             targetMethod = method.methodName,
-            isInstanceMethod = !method.isStatic,
+            argumentsCount = argumentsCount,
             klass = originalClassFile,
             commonTypeResolver = commonTypeResolver
     ) ?: return unitWithLog("Failed to redefine class")
@@ -41,6 +43,7 @@ internal fun debuggerJump(
 
     val localVariables =
             currentFrame.visibleVariables()
+                    .filterNot { arguments.contains(it.variable) }
                     .map { it.name() to currentFrame.getValue(it) }
                     .filter { it.second !== null }
 
