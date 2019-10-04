@@ -107,15 +107,33 @@ internal fun tryGetLinesToJump(
         session: DebuggerSession,
         project: Project,
         file: VirtualFile,
+        preferableStratum: String,
         overridedFileContent: ByteArray? = null
 ): GetLinesToJumpResult = runInDebuggerThread(session) {
-    tryGetLinesToJumpImpl(session, project, file, overridedFileContent) ?: UnknownErrorResult
+    tryGetLinesToJumpImpl(session, project, file, preferableStratum, overridedFileContent) ?: UnknownErrorResult
+}
+
+private class StrataViaLocationTranslator(
+        private val currentLocation: Location,
+        private val actualStratum: String
+): LineTranslator {
+
+    private val sourceNameJava = currentLocation.sourceName("Java")
+    private val method = currentLocation.method()
+
+    override fun translate(line: Int): Int? {
+        return method
+                .locationsOfLine("Java", sourceNameJava, line)
+                .firstOrNull()
+                ?.lineNumber(actualStratum)
+    }
 }
 
 private fun tryGetLinesToJumpImpl(
         session: DebuggerSession,
         project: Project,
         virtualFile: VirtualFile,
+        preferableStratum: String,
         overrideFileContent: ByteArray? = null
 ): GetLinesToJumpResult? {
 
@@ -139,9 +157,17 @@ private fun tryGetLinesToJumpImpl(
         return ClassNotFoundErrorResult
     }
 
+    //create line translator (if not Stratum is not Java)
+    //Filter by current frame with preferable Stratum
+    val actualStratum = classType.availableStrata()
+            .firstOrNull { it == preferableStratum && it != "Java" }
+    val lineTranslator =
+            actualStratum?.let { StrataViaLocationTranslator(location, actualStratum) }
+
     val result = getAvailableGotoLines(
             ownerTypeName = classType.name(),
             targetMethod = location.method().methodName,
+            lineTranslator = lineTranslator,
             klass = classFile
     ) ?: return nullWithLog("Cannot get available goto lines")
 
@@ -150,7 +176,7 @@ private fun tryGetLinesToJumpImpl(
     val availableLines =
             if (isRecursive) result.first.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result.first
 
-    availableLines?: return null
+    availableLines ?: return null
 
     return JumpLinesInfo(availableLines, result.second, classFile)
 }
@@ -199,7 +225,7 @@ private fun tryJumpToSelectedLineImpl(
 
     val location = frame.location()
 
-    if (location.lineNumber() == targetLineInfo.line) return falseWithLog("Current line selected")
+    if (location.lineNumber("Java") == targetLineInfo.javaLine) return falseWithLog("Current line selected")
 
     val classType = location.declaringType()
 

@@ -2,14 +2,23 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
 import org.jetbrains.org.objectweb.asm.*
+import org.jetbrains.plugins.setIp.LineTranslator
 
 internal typealias LocalsList = List<Pair<Type, Int>>
 
-internal data class LocalVariableAnalyzeResult(val line: Int, val locals: LocalsList, val isSafeLine: Boolean, val isFirstLine: Boolean)
+internal data class LocalVariableAnalyzeResult(
+        val javaLine: Int,
+        val sourceLine: Int,
+        val locals: LocalsList,
+        val isSafeLine: Boolean,
+        val isFirstLine: Boolean
+)
 
 internal class LocalVariableAnalyzer(
         private val ownerTypeName: String,
-        private val methodName: MethodName
+        private val methodName: MethodName,
+        private val lineTranslator: LineTranslator?,
+        private val lineFilterSet: Set<Int>
 ) : ClassVisitor6() {
 
     private data class SemiResult(val locals: LocalsList, val label: Label, val isFirstLine: Boolean)
@@ -58,7 +67,18 @@ internal class LocalVariableAnalyzer(
         return semiResult.map {
             val visiblesCount = getVariablesCountForLabel(it.value.label)
             val isSafe = visiblesCount == it.value.locals.size
-            LocalVariableAnalyzeResult(it.key, it.value.locals, isSafe, it.value.isFirstLine)
+
+            //Translate line and skip it if translation is failed
+            val sourceLine = if (lineTranslator !== null) lineTranslator.translate(it.key) else it.key
+            sourceLine ?: throw AssertionError("Translated line should not be zero on result building")
+
+            LocalVariableAnalyzeResult(
+                    javaLine = it.key,
+                    sourceLine = sourceLine,
+                    locals = it.value.locals,
+                    isSafeLine = isSafe,
+                    isFirstLine = it.value.isFirstLine
+            )
         }
     }
 
@@ -115,6 +135,12 @@ internal class LocalVariableAnalyzer(
         override fun visitLineNumber(line: Int, start: Label) {
 
             super.visitLineNumber(line, start)
+            val actuallyFirstLine = isFirstLine
+            isFirstLine = false
+
+            if (!lineFilterSet.contains(line)) return
+
+            if (lineTranslator !== null && lineTranslator.translate(line) === null) return
 
             if (semiResult.containsKey(line)) return
             if (linesExpectedFromFrame.contains(line)) return
@@ -125,8 +151,7 @@ internal class LocalVariableAnalyzer(
                 val result = locals.mapIndexedNotNull { index, type ->
                     type.convertToType()?.let { it to index }
                 }
-                semiResult[line] = SemiResult(result, labels.last(), isFirstLine)
-                isFirstLine = false
+                semiResult[line] = SemiResult(result, labels.last(), actuallyFirstLine)
             } else {
                 linesExpectedFromFrame.add(line)
             }

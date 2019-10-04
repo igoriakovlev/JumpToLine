@@ -3,10 +3,12 @@ package org.jetbrains.plugins.setIp.injectionUtils
 import org.jetbrains.org.objectweb.asm.Label
 import org.jetbrains.org.objectweb.asm.MethodVisitor
 import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
+import org.jetbrains.plugins.setIp.LineTranslator
 
 internal class StackEmptyLinesAnalyzer(
         private val ownerTypeName: String,
-        private val methodName: MethodName
+        private val methodName: MethodName,
+        private val lineTranslator: LineTranslator?
 ) : ClassVisitor6() {
 
     private val linesFound = mutableSetOf<Int>()
@@ -55,6 +57,8 @@ internal class StackEmptyLinesAnalyzer(
                 firstLineVisited = true
                 return
             }
+
+            if (lineTranslator !== null && lineTranslator.translate(line) === null) return
 
             if (analyzer!!.stack !== null) {
                 if (analyzer!!.stack.isEmpty()) {

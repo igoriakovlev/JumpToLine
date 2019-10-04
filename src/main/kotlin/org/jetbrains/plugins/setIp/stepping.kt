@@ -3,15 +3,12 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessEvents
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.intellij.openapi.ui.messages.MessageDialog
 import com.sun.jdi.Location
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
-import org.jetbrains.plugins.setIp.injectionUtils.*
 import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
 import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
-import org.jetbrains.plugins.setIp.injectionUtils.getTargetLineInfo
 import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
 import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
@@ -26,6 +23,9 @@ internal fun debuggerJump(
     val currentFrame = threadProxy.frame(0)
 
     val method = currentFrame.location().method()
+
+
+    //val sourceName = currentFrame.location().sourceName("Java")
 
     val (classToRedefine, stopLine) = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
@@ -49,12 +49,23 @@ internal fun debuggerJump(
 
     machine.redefineClasses(mapOf(declaredType to classToRedefine))
 
+//
+//    val stopPreloadLocation = method
+//            .locationsOfLine(stopLine)
+//            .firstOrNull()
+//            ?: return unitWithLog("Cannot find first stop location")
+//
+//    val targetLocation = method
+//            .locationsOfLine(targetLineInfo.line)
+//            .firstOrNull()
+//            ?: return unitWithLog("Cannot find target location")
+
     val stopPreloadLocation = declaredType.allLineLocations().firstOrNull {
         it.lineNumber() == stopLine
     }?: return unitWithLog("Cannot find first stop location")
 
     val targetLocation = declaredType.allLineLocations().firstOrNull {
-        it.lineNumber() == targetLineInfo.line
+        it.lineNumber() == targetLineInfo.javaLine
     } ?: return unitWithLog("Cannot find target location")
 
     fun StackFrameProxyImpl.trySetValue(name: String, value: Value) =

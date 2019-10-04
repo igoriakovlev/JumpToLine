@@ -9,6 +9,7 @@ import org.jetbrains.org.objectweb.asm.*
 import org.jetbrains.org.objectweb.asm.ClassReader.EXPAND_FRAMES
 import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
 import org.jetbrains.plugins.setIp.CommonTypeResolver
+import org.jetbrains.plugins.setIp.LineTranslator
 
 internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)
 internal abstract class ClassVisitor6 : ClassVisitor(Opcodes.ASM6)
@@ -29,24 +30,35 @@ internal fun MethodName.matches(name: String?, desc: String?, signature: String?
     return false
 }
 
-internal fun getAvailableGotoLines(ownerTypeName: String, targetMethod: MethodName, klass: ByteArray): Pair<List<LocalVariableAnalyzeResult>, String?>? {
+internal fun getAvailableGotoLines(
+        ownerTypeName: String,
+        targetMethod: MethodName,
+        lineTranslator: LineTranslator?,
+        klass: ByteArray
+): Pair<List<LocalVariableAnalyzeResult>, String?>? {
     //sss()
     val classReader = ClassReader(klass)
 
-    val stackAnalyzer = StackEmptyLinesAnalyzer(ownerTypeName.slashSpacedName, targetMethod)
+    val stackAnalyzer = StackEmptyLinesAnalyzer(
+            ownerTypeName = ownerTypeName.slashSpacedName,
+            methodName = targetMethod,
+            lineTranslator = lineTranslator
+    )
 
     classReader.accept(stackAnalyzer, EXPAND_FRAMES)
     val stackAnalyzerResult = stackAnalyzer.validLines ?: return null
 
-    val localsAnalyzer = LocalVariableAnalyzer(ownerTypeName, targetMethod)
+    val localsAnalyzer = LocalVariableAnalyzer(
+            ownerTypeName = ownerTypeName,
+            methodName = targetMethod,
+            lineTranslator = lineTranslator,
+            lineFilterSet = stackAnalyzerResult
+    )
     classReader.accept(localsAnalyzer, EXPAND_FRAMES)
 
     val localsAnalyzerResult = localsAnalyzer.analyzeResult ?: return null
 
-    val suitableResults =
-            localsAnalyzerResult.filter { stackAnalyzerResult.contains(it.line) }
-
-    return suitableResults to stackAnalyzer.sourceDebugLine
+    return localsAnalyzerResult to stackAnalyzer.sourceDebugLine
 }
 
 internal data class ClassAndFirstLine(val klass: ByteArray, val stopLineNumber: Int)
@@ -71,20 +83,6 @@ internal class ClassWriterWithTypeResolver(
     }
 }
 
-internal fun getTargetLineInfo(
-        ownerTypeName: String,
-        targetMethod: MethodName,
-        klass: ByteArray
-): List<LocalVariableAnalyzeResult>? {
-
-    val classReaderToWrite = ClassReader(klass)
-
-    val localCalculator = LocalVariableAnalyzer(ownerTypeName.slashSpacedName, targetMethod)
-    classReaderToWrite.accept(localCalculator, EXPAND_FRAMES)
-
-    return localCalculator.analyzeResult
-}
-
 internal fun updateClassWithGotoLinePrefix(
         targetLineInfo: LocalVariableAnalyzeResult,
         targetMethod: MethodName,
@@ -102,7 +100,7 @@ internal fun updateClassWithGotoLinePrefix(
 
     val transformer = Transformer(
             methodName = targetMethod,
-            line = targetLineInfo.line,
+            line = targetLineInfo.javaLine,
             locals = targetLineInfo.locals,
             isInstanceMethod = isInstanceMethod,
             visitor = writer

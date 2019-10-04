@@ -7,7 +7,6 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.messages.MessageDialog
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
 import java.awt.Cursor
@@ -52,10 +51,15 @@ internal class SetIPArrowGutter(
 
         if (extension != "java" && extension != "kt") return false
 
-        val jumpInfo = when(val result = tryGetLinesToJump(session, project, file)) {
+        val preferableStratum = when(extension) {
+            "kt" -> "Kotlin"
+            else -> "Java"
+        }
+
+        val jumpInfo = when(val result = tryGetLinesToJump(session, project, file, preferableStratum)) {
             is JumpLinesInfo -> result
             is ClassNotFoundErrorResult ->
-                selectClassFile(file)?.let { tryGetLinesToJump(session, project, file, it) as? JumpLinesInfo }
+                selectClassFile(file)?.let { tryGetLinesToJump(session, project, file, preferableStratum, it) as? JumpLinesInfo }
             else -> null
         }
 
@@ -81,7 +85,7 @@ internal class SetIPArrowGutter(
     }
 
     private fun localAnalysisByRenderLine(line: Int) =
-            currentJumpInfo?.linesToJump?.firstOrNull { it.line == line + 1 }
+            currentJumpInfo?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
 
     private var currentJumpInfo: JumpLinesInfo? = null
 
