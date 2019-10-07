@@ -21,10 +21,13 @@ internal fun Throwable.logException(): Unit
 
 
 @Suppress("UNREACHABLE_CODE")
-internal fun dumpClass(klass: ByteArray) {
+internal fun dumpClass(originalClass: ByteArray, pathedClass: ByteArray) {
     //return
+    FileOutputStream("C:\\AAA\\Original.class").use {
+        it.write(originalClass)
+    }
     FileOutputStream("C:\\AAA\\Pathed.class").use {
-        it.write(klass);
+        it.write(pathedClass)
     }
 }
 

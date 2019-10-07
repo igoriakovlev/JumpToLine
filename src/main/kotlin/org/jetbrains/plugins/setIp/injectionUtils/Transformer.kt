@@ -2,6 +2,8 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.jetbrains.org.objectweb.asm.*
 
+internal const val firstStopCodeIndex = 4L
+
 internal class Transformer(
         private val methodName: MethodName,
         private val line: Int,
@@ -17,13 +19,9 @@ internal class Transformer(
     val transformationSuccess get() =
         methodVisited && lineVisited && !methodVisitedTwice
 
-    var stopLineNumber = 0
-        private set
-
     private inner class MethodTransformer(private val targetLine: Int, visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM6, visitor) {
 
         private val labelToMark = Label()
-        private val stopLabel = Label()
 
         private val Type.defaultValue : Any?
             get() = when (this) {
@@ -72,45 +70,36 @@ internal class Transformer(
 
             val extraVariable = locals.count()
 
+            val labelOnStart = Label()
+            val labelOnFinish = Label()
+
+            super.visitLabel(labelOnStart)
+
+            super.visitLdcInsn(0)
+            super.visitVarInsn(Opcodes.ISTORE, extraVariable)
+            super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
+
             super.visitLdcInsn(0)
             super.visitVarInsn(Opcodes.ISTORE, extraVariable)
 
-            super.visitLabel(stopLabel)
+            super.visitJumpInsn(Opcodes.IFEQ, labelOnFinish)
+
+            emitNullifyLocals()
+
+            super.visitJumpInsn(Opcodes.GOTO, labelToMark)
+
+            super.visitLabel(labelOnFinish)
+
+            super.visitLocalVariable("$$", "I", null, labelOnStart, labelOnFinish, extraVariable)
 
             super.visitCode()
         }
 
-        private var isStartLabel = true
-
         override fun visitLineNumber(line: Int, start: Label?) {
-
-            if (isStartLabel) {
-                isStartLabel = false
-
-                stopLineNumber = line
-
-                super.visitLabel(start)
-                super.visitLineNumber(line, start) //<---
-
-                super.visitVarInsn(Opcodes.ILOAD, locals.count())
-                super.visitLdcInsn(0)
-                super.visitVarInsn(Opcodes.ISTORE, locals.count())
-
-                val labelToJump = Label()
-                super.visitJumpInsn(Opcodes.IFEQ, labelToJump)
-
-                emitNullifyLocals()
-                super.visitJumpInsn(Opcodes.GOTO, labelToMark)
-
-                super.visitLabel(labelToJump)
-                return
-            }
-
             if (targetLine == line) {
                 if (!lineVisited) {
                     lineVisited = true
                     super.visitLabel(labelToMark)
-                    super.visitLocalVariable("$$", "I", null, stopLabel, labelToMark, locals.count())
                 }
             }
             super.visitLineNumber(line, start)

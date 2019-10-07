@@ -14,9 +14,6 @@ internal class StackEmptyLinesAnalyzer(
     private val linesFound = mutableSetOf<Int>()
     private val linesVisited = mutableSetOf<Int>()
 
-    var sourceDebugLine: String? = null
-        private set
-
     private var methodVisited = false
     private var methodVisitedTwice = false
     private var frameExpected = false
@@ -69,11 +66,6 @@ internal class StackEmptyLinesAnalyzer(
                 lineOfExpectedFrame = line
             }
         }
-    }
-
-    override fun visitSource(source: String?, debug: String?) {
-        sourceDebugLine = debug
-        super.visitSource(source, debug)
     }
 
     override fun visitMethod(

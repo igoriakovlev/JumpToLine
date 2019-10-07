@@ -3,18 +3,21 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessEvents
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
+import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
+import org.jetbrains.plugins.setIp.injectionUtils.*
 import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
+import org.jetbrains.plugins.setIp.injectionUtils.Transformer
 import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
 import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
 import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
 internal fun debuggerJump(
         targetLineInfo: LocalVariableAnalyzeResult,
-        declaredType: ReferenceType,
+        declaredType: ClassType,
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver
@@ -27,9 +30,7 @@ internal fun debuggerJump(
 
     val argumentsCount = arguments.size + if (!method.isStatic) 1 else 0
 
-    //val sourceName = currentFrame.location().sourceName("Java")
-
-    val (classToRedefine, stopLine) = updateClassWithGotoLinePrefix(
+    val classToRedefine = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
             targetMethod = method.methodName,
             argumentsCount = argumentsCount,
@@ -37,7 +38,7 @@ internal fun debuggerJump(
             commonTypeResolver = commonTypeResolver
     ) ?: return unitWithLog("Failed to redefine class")
 
-    dumpClass(classToRedefine)
+    dumpClass(originalClassFile, classToRedefine)
 
     val machine = threadProxy.virtualMachineProxy
 
@@ -50,26 +51,20 @@ internal fun debuggerJump(
 
     threadProxy.popFrames(currentFrame)
 
+    val methodName = method.name()
+    val signature = method.signature()
+
     machine.redefineClasses(mapOf(declaredType to classToRedefine))
 
-//
-//    val stopPreloadLocation = method
-//            .locationsOfLine(stopLine)
-//            .firstOrNull()
-//            ?: return unitWithLog("Cannot find first stop location")
-//
-//    val targetLocation = method
-//            .locationsOfLine(targetLineInfo.line)
-//            .firstOrNull()
-//            ?: return unitWithLog("Cannot find target location")
+    val newMethod = declaredType.concreteMethodByName(methodName, signature)
+            ?: return unitWithLog("Cannot find refurbished method with given name and signature")
 
-    val stopPreloadLocation = declaredType.allLineLocations().firstOrNull {
-        it.lineNumber() == stopLine
-    }?: return unitWithLog("Cannot find first stop location")
+    val stopPreloadLocation = newMethod.locationOfCodeIndex(firstStopCodeIndex)
+            ?: return unitWithLog("Cannot find first stop location")
 
-    val targetLocation = declaredType.allLineLocations().firstOrNull {
-        it.lineNumber() == targetLineInfo.javaLine
-    } ?: return unitWithLog("Cannot find target location")
+    val targetLocation = newMethod.locationsOfLine(targetLineInfo.javaLine)
+            .minBy { it.codeIndex() }
+            ?: return unitWithLog("Cannot find target location")
 
     fun StackFrameProxyImpl.trySetValue(name: String, value: Value) =
             visibleVariableByName(name)?.let {

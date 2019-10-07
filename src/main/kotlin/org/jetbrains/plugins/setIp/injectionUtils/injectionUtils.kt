@@ -35,7 +35,7 @@ internal fun getAvailableGotoLines(
         targetMethod: MethodName,
         lineTranslator: LineTranslator?,
         klass: ByteArray
-): Pair<List<LocalVariableAnalyzeResult>, String?>? {
+): List<LocalVariableAnalyzeResult>? {
     //sss()
     val classReader = ClassReader(klass)
 
@@ -56,12 +56,8 @@ internal fun getAvailableGotoLines(
     )
     classReader.accept(localsAnalyzer, EXPAND_FRAMES)
 
-    val localsAnalyzerResult = localsAnalyzer.analyzeResult ?: return null
-
-    return localsAnalyzerResult to stackAnalyzer.sourceDebugLine
+    return localsAnalyzer.analyzeResult
 }
-
-internal data class ClassAndFirstLine(val klass: ByteArray, val stopLineNumber: Int)
 
 internal class ClassWriterWithTypeResolver(
         private val commonTypeResolver: CommonTypeResolver,
@@ -89,7 +85,7 @@ internal fun updateClassWithGotoLinePrefix(
         argumentsCount: Int,
         klass: ByteArray,
         commonTypeResolver: CommonTypeResolver
-): ClassAndFirstLine? {
+): ByteArray? {
 
     val classReaderToWrite = ClassReader(klass)
     val writer = ClassWriterWithTypeResolver(
@@ -108,5 +104,5 @@ internal fun updateClassWithGotoLinePrefix(
 
     classReaderToWrite.accept(transformer, SKIP_FRAMES)
 
-    return if (transformer.transformationSuccess) ClassAndFirstLine(writer.toByteArray(), transformer.stopLineNumber) else null
+    return if (transformer.transformationSuccess) writer.toByteArray() else null
 }

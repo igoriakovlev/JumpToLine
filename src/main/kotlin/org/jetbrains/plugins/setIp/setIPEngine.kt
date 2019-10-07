@@ -18,6 +18,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.xdebugger.impl.XDebugSessionImpl
+import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
 import org.jetbrains.plugins.setIp.injectionUtils.*
@@ -99,7 +100,7 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
 }
 
 internal sealed class GetLinesToJumpResult
-internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val sourceDebugLine: String?, val classFile: ByteArray) : GetLinesToJumpResult()
+internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray) : GetLinesToJumpResult()
 internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
@@ -174,11 +175,11 @@ private fun tryGetLinesToJumpImpl(
     val isRecursive = checkIsTopMethodRecursive(frame.location(), threadProxy)
 
     val availableLines =
-            if (isRecursive) result.first.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result.first
+            if (isRecursive) result.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result
 
     availableLines ?: return null
 
-    return JumpLinesInfo(availableLines, result.second, classFile)
+    return JumpLinesInfo(availableLines, classFile)
 }
 
 internal fun tryJumpToSelectedLine(
@@ -227,7 +228,7 @@ private fun tryJumpToSelectedLineImpl(
 
     if (location.lineNumber("Java") == targetLineInfo.javaLine) return falseWithLog("Current line selected")
 
-    val classType = location.declaringType()
+    val classType = location.declaringType() as? ClassType ?: return falseWithLog("Invalid location type")
 
     if (targetLineInfo.isFirstLine) {
         threadProxy.jumpByFrameDrop()
