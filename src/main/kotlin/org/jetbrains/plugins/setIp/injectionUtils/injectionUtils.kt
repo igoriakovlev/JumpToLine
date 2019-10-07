@@ -39,24 +39,17 @@ internal fun getAvailableGotoLines(
     //sss()
     val classReader = ClassReader(klass)
 
-    val stackAnalyzer = StackEmptyLinesAnalyzer(
-            ownerTypeName = ownerTypeName.slashSpacedName,
+    val stackAnalyzerResult =
+            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator)
+                    ?: return null
+
+    return LocalVariableAnalyzer.analyze(
+            classReader = classReader,
             methodName = targetMethod,
-            lineTranslator = lineTranslator
-    )
-
-    classReader.accept(stackAnalyzer, EXPAND_FRAMES)
-    val stackAnalyzerResult = stackAnalyzer.validLines ?: return null
-
-    val localsAnalyzer = LocalVariableAnalyzer(
             ownerTypeName = ownerTypeName,
-            methodName = targetMethod,
             lineTranslator = lineTranslator,
             lineFilterSet = stackAnalyzerResult
     )
-    classReader.accept(localsAnalyzer, EXPAND_FRAMES)
-
-    return localsAnalyzer.analyzeResult
 }
 
 internal class ClassWriterWithTypeResolver(

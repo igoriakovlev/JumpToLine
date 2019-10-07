@@ -5,15 +5,9 @@ import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
-import com.sun.jdi.ReferenceType
 import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
 import org.jetbrains.plugins.setIp.injectionUtils.*
-import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
-import org.jetbrains.plugins.setIp.injectionUtils.Transformer
-import org.jetbrains.plugins.setIp.injectionUtils.dumpClass
-import org.jetbrains.plugins.setIp.injectionUtils.unitWithLog
-import org.jetbrains.plugins.setIp.injectionUtils.updateClassWithGotoLinePrefix
 
 internal fun debuggerJump(
         targetLineInfo: LocalVariableAnalyzeResult,
