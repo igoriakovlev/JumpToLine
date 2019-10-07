@@ -16,7 +16,6 @@ import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
@@ -106,12 +105,9 @@ internal object UnknownErrorResult : GetLinesToJumpResult()
 
 internal fun tryGetLinesToJump(
         session: DebuggerSession,
-        project: Project,
-        file: VirtualFile,
-        preferableStratum: String,
-        overridedFileContent: ByteArray? = null
+        preferableStratum: String
 ): GetLinesToJumpResult = runInDebuggerThread(session) {
-    tryGetLinesToJumpImpl(session, project, file, preferableStratum, overridedFileContent) ?: UnknownErrorResult
+    tryGetLinesToJumpImpl(session, preferableStratum) ?: UnknownErrorResult
 }
 
 private class StrataViaLocationTranslator(
@@ -132,10 +128,7 @@ private class StrataViaLocationTranslator(
 
 private fun tryGetLinesToJumpImpl(
         session: DebuggerSession,
-        project: Project,
-        virtualFile: VirtualFile,
-        preferableStratum: String,
-        overrideFileContent: ByteArray? = null
+        preferableStratum: String
 ): GetLinesToJumpResult? {
 
     val process = session.process
@@ -150,9 +143,9 @@ private fun tryGetLinesToJumpImpl(
 
     val location = frame.location()
 
-    val classType = location.declaringType()
+    val classType = location.declaringType() as? ClassType ?: return nullWithLog("Invalid type to jump")
 
-    val classFile = overrideFileContent ?: tryLocateClassFile(project, classType.name(), virtualFile)
+    val classFile = threadProxy.threadReference.tryGetTypeByteCode(classType)
     classFile ?: run {
         unitWithLog("Cannot get class file for ${classType.name()}")
         return ClassNotFoundErrorResult

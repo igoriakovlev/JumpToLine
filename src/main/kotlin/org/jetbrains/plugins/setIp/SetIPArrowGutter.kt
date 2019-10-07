@@ -3,48 +3,18 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.markup.GutterDraggableObject
-import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.plugins.setIp.injectionUtils.LocalVariableAnalyzeResult
 import java.awt.Cursor
 import java.awt.dnd.DragSource
-import java.io.File
 
 internal class SetIPArrowGutter(
         private val project: Project,
         private val commonTypeResolver: CommonTypeResolver,
         private val session: DebuggerSession
 ): GutterDraggableObject {
-
-    private val fileChooser =
-            FileChooserFactory.getInstance().createFileChooser(
-                    FileChooserDescriptorFactory
-                            .createSingleFileDescriptor("class")
-                            .withDescription("Select .class for type with method you trying to SetIP"),
-                    project,
-                    null)
-
-    private fun selectClassFile(file: VirtualFile): ByteArray? {
-
-        val outputFilePath = tryGetOutputFilePaths(project, file)
-                ?.mapNotNull (file.fileSystem::findFileByPath)
-                ?: emptyList()
-
-        val selectedFiles = fileChooser.choose(project, *outputFilePath.toTypedArray())
-        if (selectedFiles.isEmpty()) return null
-
-        selectedFiles[0].path.let {
-            val selectedFile = File(it)
-            if (selectedFile.isFile && selectedFile.canRead()) {
-                return selectedFile.readBytes()
-            }
-        }
-
-        return null
-    }
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
         val extension = file?.extension ?: return false
@@ -56,10 +26,8 @@ internal class SetIPArrowGutter(
             else -> "Java"
         }
 
-        val jumpInfo = when(val result = tryGetLinesToJump(session, project, file, preferableStratum)) {
+        val jumpInfo = when(val result = tryGetLinesToJump(session, preferableStratum)) {
             is JumpLinesInfo -> result
-            is ClassNotFoundErrorResult ->
-                selectClassFile(file)?.let { tryGetLinesToJump(session, project, file, preferableStratum, it) as? JumpLinesInfo }
             else -> null
         }
 

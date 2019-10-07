@@ -3,9 +3,7 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessEvents
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.sun.jdi.ClassType
-import com.sun.jdi.Location
-import com.sun.jdi.Value
+import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
@@ -41,7 +39,6 @@ internal fun debuggerJump(
                     .filterNot { arguments.contains(it.variable) }
                     .map { it.name() to currentFrame.getValue(it) }
                     .filter { it.second !== null }
-
 
     threadProxy.popFrames(currentFrame)
 
