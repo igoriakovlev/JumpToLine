@@ -104,10 +104,9 @@ internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
 internal fun tryGetLinesToJump(
-        session: DebuggerSession,
-        preferableStratum: String
+        session: DebuggerSession
 ): GetLinesToJumpResult = runInDebuggerThread(session) {
-    tryGetLinesToJumpImpl(session, preferableStratum) ?: UnknownErrorResult
+    tryGetLinesToJumpImpl(session) ?: UnknownErrorResult
 }
 
 private class StrataViaLocationTranslator(
@@ -126,10 +125,7 @@ private class StrataViaLocationTranslator(
     }
 }
 
-private fun tryGetLinesToJumpImpl(
-        session: DebuggerSession,
-        preferableStratum: String
-): GetLinesToJumpResult? {
+private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResult? {
 
     val process = session.process
 
@@ -151,12 +147,10 @@ private fun tryGetLinesToJumpImpl(
         return ClassNotFoundErrorResult
     }
 
-    //create line translator (if not Stratum is not Java)
-    //Filter by current frame with preferable Stratum
-    val actualStratum = classType.availableStrata()
-            .firstOrNull { it == preferableStratum && it != "Java" }
-    val lineTranslator =
-            actualStratum?.let { StrataViaLocationTranslator(location, actualStratum) }
+    //create line translator for Kotlin if able
+    val lineTranslator = classType.availableStrata()?.let {
+        if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
+    }
 
     val result = getAvailableGotoLines(
             ownerTypeName = classType.name(),

@@ -17,22 +17,9 @@ internal class SetIPArrowGutter(
 ): GutterDraggableObject {
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
-        val extension = file?.extension ?: return false
 
-        if (extension != "java" && extension != "kt") return false
-
-        val preferableStratum = when(extension) {
-            "kt" -> "Kotlin"
-            else -> "Java"
-        }
-
-        val jumpInfo = when(val result = tryGetLinesToJump(session, preferableStratum)) {
-            is JumpLinesInfo -> result
-            else -> null
-        }
-
-        currentJumpInfo = jumpInfo
-        jumpInfo ?: return false
+        val jumpInfo = tryGetLinesToJump(session) as? JumpLinesInfo
+        currentJumpInfo = jumpInfo ?: return false
 
         val selected = localAnalysisByRenderLine(line) ?: return false
 
