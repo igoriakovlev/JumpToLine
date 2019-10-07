@@ -29,8 +29,8 @@ internal class SetIPExecutionLineGutterRenderer(
     override fun hashCode(): Int = threadProxy.hashCode()
 
     override fun getIcon(): Icon =
-            if (canJump.first) IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
-            else IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
+            if (canJump.first) IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
+            else IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
 
     override fun equals(other: Any?): Boolean = other is SetIPExecutionLineGutterRenderer && frame == other.frame
 
