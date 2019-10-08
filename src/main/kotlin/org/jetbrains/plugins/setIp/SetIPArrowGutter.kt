@@ -18,9 +18,7 @@ internal class SetIPArrowGutter(
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
 
-        val jumpInfo = tryGetLinesToJump(session) as? JumpLinesInfo
-        currentJumpInfo = jumpInfo ?: return false
-
+        val classFile = currentJumpInfo?.classFile ?: return false
         val selected = localAnalysisByRenderLine(line) ?: return false
 
         if (!selected.isSafeLine) {
@@ -29,20 +27,30 @@ internal class SetIPArrowGutter(
             if (dialog.exitCode == 1) return false
         }
 
-        return tryJumpToSelectedLine(selected, jumpInfo.classFile)
+        return tryJumpToSelectedLine(selected, classFile)
+    }
+
+    companion object {
+        private val GoodToMove = DragSource.DefaultMoveDrop
+        private val BadToMove = Cursor(Cursor.CROSSHAIR_CURSOR)
+        private val NoMove = DragSource.DefaultMoveNoDrop
     }
 
     override fun getCursor(line: Int, actionId: Int): Cursor {
-        val selected =
-                localAnalysisByRenderLine(line) ?: return DragSource.DefaultMoveNoDrop
+        if (actionId != 2) return NoMove
 
-        return if (selected.isSafeLine) DragSource.DefaultMoveDrop else DragSource.DefaultLinkDrop
+        val selected =
+                localAnalysisByRenderLine(line) ?: return NoMove
+
+        return if (selected.isSafeLine) GoodToMove else BadToMove
     }
 
     private fun localAnalysisByRenderLine(line: Int) =
             currentJumpInfo?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
 
-    private var currentJumpInfo: JumpLinesInfo? = null
+    private val currentJumpInfo: JumpLinesInfo? by lazy {
+        tryGetLinesToJump(session) as? JumpLinesInfo
+    }
 
     private fun tryJumpToSelectedLine(analyzeResult: LocalVariableAnalyzeResult, classFile: ByteArray): Boolean {
 
@@ -58,7 +66,7 @@ internal class SetIPArrowGutter(
             session.xDebugSession?.run {
                 ApplicationManager.getApplication().invokeLater {
                     session.refresh(true)
-                    //rebuildViews()
+                    rebuildViews()
                     showExecutionPoint()
                 }
             }
