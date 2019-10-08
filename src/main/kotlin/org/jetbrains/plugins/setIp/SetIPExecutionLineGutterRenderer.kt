@@ -17,31 +17,28 @@ import javax.swing.Icon
 internal class SetIPExecutionLineGutterRenderer(
     private val session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
-    private val project: Project,
-    private val commonTypeResolver: CommonTypeResolver
+    project: Project,
+    commonTypeResolver: CommonTypeResolver
 ) : GutterIconRenderer(), GutterMark {
 
-    private val process = session.process
-    private val context = process.debuggerContext
-    private val threadProxy = context.threadProxy
-    private val frame = context.frameProxy
-
-    override fun hashCode(): Int = threadProxy.hashCode()
+    override fun hashCode(): Int = 0
 
     override fun getIcon(): Icon =
             if (canJump.first) IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
             else IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
 
-    override fun equals(other: Any?): Boolean = other is SetIPExecutionLineGutterRenderer && frame == other.frame
+    override fun equals(other: Any?): Boolean = false
 
     override fun getAlignment(): Alignment = Alignment.LEFT
 
     override fun getDraggableObject(): GutterDraggableObject?
-        = if (canJump.first) SetIPArrowGutter(project, commonTypeResolver, session) else null
+        = if (canJump.first) gutter else null
 
     override fun isNavigateAction(): Boolean = canJump.first
 
     override fun getTooltipText(): String? = canJump.second
+
+    private val gutter = SetIPArrowGutter(project, commonTypeResolver, session)
 
     private val canJump by lazy {
         checkCanJump(session, xsession)
