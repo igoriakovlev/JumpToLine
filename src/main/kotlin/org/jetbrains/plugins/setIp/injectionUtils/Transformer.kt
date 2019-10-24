@@ -2,7 +2,7 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.jetbrains.org.objectweb.asm.*
 
-internal const val firstStopCodeIndex = 4L
+internal const val firstStopCodeIndex = 5L
 
 internal class Transformer(
         private val methodName: MethodName,
@@ -77,6 +77,12 @@ internal class Transformer(
 
             super.visitLdcInsn(0)
             super.visitVarInsn(Opcodes.ISTORE, extraVariable)
+            // THIS MAGIC NOP HAVE TO BE HERE
+            // There is two variants are possible: ldc and ldc_w
+            // To make possible to stop AFTER istore BUT before iload we need determine iload index (that could be #4 or #5)
+            // But ASM not giving to us what index we should choose so the workaround is to choose index #5 with extra nop.
+            // With this workaround we get that index #5 points either on nop or iload command, as required.
+            super.visitInsn(Opcodes.NOP)
             super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
 
             super.visitLdcInsn(0)
