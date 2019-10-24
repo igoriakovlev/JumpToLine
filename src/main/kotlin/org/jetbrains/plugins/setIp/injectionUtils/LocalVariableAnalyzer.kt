@@ -91,6 +91,12 @@ internal class LocalVariableAnalyzer private constructor(
         else -> error { "Opcode does not supported $this" }
     }
 
+    private val Type.indexShiftSize get() =
+        when(this) {
+            Type.LONG_TYPE, Type.DOUBLE_TYPE -> 2
+            else -> 1
+        }
+
     override fun visitLocalVariable(name: String, descriptor: String?, signature: String?, start: Label, end: Label, index: Int) {
         super.visitLocalVariable(name, descriptor, signature, start, end, index)
         localVariablesWithRanges.add(start to end)
@@ -113,9 +119,14 @@ internal class LocalVariableAnalyzer private constructor(
 
         val resultBuilder = mutableListOf<Pair<Type, Int>>()
 
+        var currentLocalIndex = 0
         for (index in 0 until numLocal) {
-            val convertedType = local[index]?.convertToType() ?: continue
-            resultBuilder.add(convertedType to index)
+            val variable = local[index]
+            requireNotNull(variable) { "Unexpected local variable null" }
+            val convertedType = variable.convertToType()
+            requireNotNull(convertedType) { "Unexpected local variable converted type null" }
+            resultBuilder.add(convertedType to currentLocalIndex)
+            currentLocalIndex += convertedType.indexShiftSize
         }
 
         linesExpectedFromFrame.forEach {

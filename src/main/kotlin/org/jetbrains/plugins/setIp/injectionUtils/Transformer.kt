@@ -68,7 +68,7 @@ internal class Transformer(
 
         override fun visitCode() {
 
-            val extraVariable = locals.count()
+            val extraVariable = locals.maxBy { it.second }?.let { it.second + 1 } ?: 0
 
             val labelOnStart = Label()
             val labelOnFinish = Label()
