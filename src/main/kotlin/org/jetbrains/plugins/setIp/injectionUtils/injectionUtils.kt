@@ -64,12 +64,9 @@ internal class ClassWriterWithTypeResolver(
         if (type1 == "java/lang/Object") return type2
         if (type2 == "java/lang/Object") return type1
 
-        val type1FqName = type1.dotSpacedName
-        val type2FqName = type2.dotSpacedName
-
-        return commonTypeResolver.tryGetCommonType(type1FqName, type2FqName)
-                ?.slashSpacedName
-                ?: "java/lang/Object"
+        return commonTypeResolver
+                .tryGetCommonType(type1.dotSpacedName, type2.dotSpacedName)
+                .slashSpacedName
     }
 }
 

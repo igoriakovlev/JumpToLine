@@ -27,7 +27,7 @@ internal class CommonTypeResolver(private val project: Project) {
         return null
     }
 
-    fun tryGetCommonType(fqName1: String, fqName2: String): String? {
+    fun tryGetCommonType(fqName1: String, fqName2: String): String {
 
         if (fqName1 == fqName2) return fqName1
         if (fqName1 == "java.lang.Object") return fqName2
@@ -37,6 +37,7 @@ internal class CommonTypeResolver(private val project: Project) {
         val class2 = PsiType.getTypeByName(fqName2, project, allScope).resolve() ?: throw TypeResolveError.INSTANCE
 
         val firstTry = findCommonSuperClass(class1, class2)?.qualifiedName
-        return if (firstTry == "java.lang.Object") findCommonSuperClass(class2, class1)?.qualifiedName else firstTry
+        val result = if (firstTry == "java.lang.Object") findCommonSuperClass(class2, class1)?.qualifiedName else firstTry
+        return result ?: throw TypeResolveError.INSTANCE
     }
 }
