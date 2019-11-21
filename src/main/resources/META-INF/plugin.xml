@@ -6,6 +6,8 @@
 
   <depends>com.intellij.modules.lang</depends>
 
+  <description>Moves your execution point anywhere possible position</description>
+
   <idea-version since-build="191"/>
 
   <project-components>
