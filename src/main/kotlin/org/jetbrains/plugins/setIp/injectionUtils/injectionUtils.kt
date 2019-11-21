@@ -10,6 +10,7 @@ import org.jetbrains.org.objectweb.asm.ClassReader.EXPAND_FRAMES
 import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
 import org.jetbrains.plugins.setIp.CommonTypeResolver
 import org.jetbrains.plugins.setIp.LineTranslator
+import org.jetbrains.plugins.setIp.TypeResolveError
 
 internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)
 internal abstract class ClassVisitor6 : ClassVisitor(Opcodes.ASM6)
@@ -95,7 +96,12 @@ internal fun updateClassWithGotoLinePrefix(
             visitor = writer
     )
 
-    classReaderToWrite.accept(transformer, SKIP_FRAMES)
+    try {
+        classReaderToWrite.accept(transformer, SKIP_FRAMES)
+    } catch(e: TypeResolveError) {
+        return null
+    }
+
 
     return if (transformer.transformationSuccess) writer.toByteArray() else null
 }
