@@ -87,7 +87,7 @@ internal class LocalVariableAnalyzer private constructor(
         Opcodes.LONG -> Type.LONG_TYPE
         Opcodes.UNINITIALIZED_THIS -> Type.getObjectType(ownerTypeName)
         Opcodes.TOP -> null
-        Opcodes.NULL -> error { "Opcode does not supported NULL" }
+        Opcodes.NULL -> Type.getObjectType("java.lang.Object")
         else -> error { "Opcode does not supported $this" }
     }
 

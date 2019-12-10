@@ -159,7 +159,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             klass = classFile
     ) ?: return nullWithLog("Cannot get available goto lines")
 
-    val isRecursive = checkIsTopMethodRecursive(frame.location(), threadProxy)
+    val isRecursive = false //checkIsTopMethodRecursive(frame.location(), threadProxy)
 
     val availableLines =
             if (isRecursive) result.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result
@@ -207,6 +207,9 @@ private fun tryJumpToSelectedLineImpl(
 
     val context = process.debuggerContext
     val threadProxy = context.threadProxy ?: return falseWithLog("Cannot get threadProxy")
+
+    if (!threadProxy.isSuspended) return falseWithLog("Calling jump on unsuspended thread")
+
     if (threadProxy.frameCount() < 2) return falseWithLog("frameCount < 2")
 
     val frame = context.frameProxy ?: return falseWithLog("Cannot get frameProxy")
