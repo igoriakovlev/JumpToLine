@@ -47,7 +47,6 @@ internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl)
 
 private const val NOT_SUSPENDED = "Debugger session is not suspended"
 private const val SOME_ERROR = "Not available in current for some reason :("
-private const val CANT_LOCATE_CLASS_FILE = "Could't locate compiled .class file"
 private const val MAIN_FUNCTION_CALL = "SetIP is not available for main function call"
 private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top frames"
 private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
@@ -67,6 +66,8 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
 
     val context = process.debuggerContext
     val threadProxy = context.threadProxy ?: return false to SOME_ERROR
+
+    if (!threadProxy.isSuspended) return false to NOT_SUSPENDED
 
     if (threadProxy.frameCount() < 2) return false to MAIN_FUNCTION_CALL
 
