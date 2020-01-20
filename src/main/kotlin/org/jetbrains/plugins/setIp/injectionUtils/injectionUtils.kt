@@ -6,11 +6,14 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.jetbrains.org.objectweb.asm.*
-import org.jetbrains.org.objectweb.asm.ClassReader.EXPAND_FRAMES
 import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
+import org.jetbrains.org.objectweb.asm.util.CheckClassAdapter
 import org.jetbrains.plugins.setIp.CommonTypeResolver
 import org.jetbrains.plugins.setIp.LineTranslator
 import org.jetbrains.plugins.setIp.TypeResolveError
+import java.io.PrintWriter
+import java.io.StringWriter
+
 
 internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)
 internal abstract class ClassVisitor6 : ClassVisitor(Opcodes.ASM6)
@@ -37,7 +40,7 @@ internal fun getAvailableGotoLines(
         lineTranslator: LineTranslator?,
         klass: ByteArray
 ): List<LocalVariableAnalyzeResult>? {
-    //sss()
+
     val classReader = ClassReader(klass)
 
     val stackAnalyzerResult =
@@ -85,20 +88,26 @@ internal fun updateClassWithGotoLinePrefix(
             flags = ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS
     )
 
+//    val stringWriter = StringWriter()
+//    val printWriter = PrintWriter(stringWriter)
+//    CheckClassAdapter()
+
     val transformer = Transformer(
             methodName = targetMethod,
             line = targetLineInfo.javaLine,
             locals = targetLineInfo.locals,
+            methodLocalsCount = targetLineInfo.methodLocalsCount,
             argumentsCount = argumentsCount,
             visitor = writer
     )
 
     try {
         classReaderToWrite.accept(transformer, SKIP_FRAMES)
+//        val errors = printWriter.toString()
+//        if (errors.isNotBlank()) return nullWithLog(errors)
     } catch(e: TypeResolveError) {
         return null
     }
-
 
     return if (transformer.transformationSuccess) writer.toByteArray() else null
 }

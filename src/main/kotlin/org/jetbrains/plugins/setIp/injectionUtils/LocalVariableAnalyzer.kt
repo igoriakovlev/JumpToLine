@@ -11,7 +11,8 @@ internal data class LocalVariableAnalyzeResult(
         val sourceLine: Int,
         val locals: LocalsList,
         val isSafeLine: Boolean,
-        val isFirstLine: Boolean
+        val isFirstLine: Boolean,
+        val methodLocalsCount: Int
 )
 
 internal class LocalVariableAnalyzer private constructor(
@@ -58,6 +59,8 @@ internal class LocalVariableAnalyzer private constructor(
 
     private val analyzeResult: List<LocalVariableAnalyzeResult>? get() {
 
+        val methodLocalsCount = semiResult.maxBy { it.value.locals.size }?.value?.locals?.size ?: 0
+
         return semiResult.map {
             val visiblesCount = getVariablesCountForLabel(it.value.label)
             val isSafe = visiblesCount == it.value.locals.size
@@ -71,7 +74,8 @@ internal class LocalVariableAnalyzer private constructor(
                     sourceLine = sourceLine,
                     locals = it.value.locals,
                     isSafeLine = isSafe,
-                    isFirstLine = it.value.isFirstLine
+                    isFirstLine = it.value.isFirstLine,
+                    methodLocalsCount = methodLocalsCount
             )
         }
     }

@@ -8,7 +8,9 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
+import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
+import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
@@ -176,25 +178,49 @@ internal fun tryJumpToSelectedLine(
     targetLineInfo: LocalVariableAnalyzeResult,
     classFile: ByteArray,
     commonTypeResolver: CommonTypeResolver
-) = runInDebuggerThread(session) {
-    session.process.let {
+): Boolean {
 
-        val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-        breakpointManager.disableBreakpoints(it)
-        StackCapturingLineBreakpoint.deleteAll(it)
 
-        val result = tryJumpToSelectedLineImpl(
-                session = session,
-                classFile = classFile,
-                targetLineInfo = targetLineInfo,
-                commonTypeResolver = commonTypeResolver
-        )
+    val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
+        override fun threadAction(suspendContext: SuspendContextImpl) {
+            val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+            breakpointManager.disableBreakpoints(suspendContext.debugProcess)
+            StackCapturingLineBreakpoint.deleteAll(suspendContext.debugProcess)
 
-        breakpointManager.enableBreakpoints(it)
-        StackCapturingLineBreakpoint.createAll(it)
+            /*result =*/ tryJumpToSelectedLineImpl(
+                    session = session,
+                    classFile = classFile,
+                    targetLineInfo = targetLineInfo,
+                    commonTypeResolver = commonTypeResolver
+            )
 
-        result
+            breakpointManager.enableBreakpoints(suspendContext.debugProcess)
+            StackCapturingLineBreakpoint.createAll(suspendContext.debugProcess)
+        }
     }
+    session.process.managerThread.schedule(command)
+
+    return true
+//    return runInDebuggerThread(session) {
+//        session.process.let {
+//
+//            val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+//            breakpointManager.disableBreakpoints(it)
+//            StackCapturingLineBreakpoint.deleteAll(it)
+//
+//            val result = tryJumpToSelectedLineImpl(
+//                    session = session,
+//                    classFile = classFile,
+//                    targetLineInfo = targetLineInfo,
+//                    commonTypeResolver = commonTypeResolver
+//            )
+//
+//            breakpointManager.enableBreakpoints(it)
+//            StackCapturingLineBreakpoint.createAll(it)
+//
+//            result
+//        }
+//    }
 }
 
 private fun tryJumpToSelectedLineImpl(
@@ -222,19 +248,20 @@ private fun tryJumpToSelectedLineImpl(
     val classType = location.declaringType() as? ClassType ?: return falseWithLog("Invalid location type")
 
     if (targetLineInfo.isFirstLine) {
-        threadProxy.jumpByFrameDrop()
+        jumpByFrameDrop(
+                threadProxy = threadProxy,
+                process = process
+        )
     } else {
         debuggerJump(
                 targetLineInfo = targetLineInfo,
                 declaredType = classType,
                 originalClassFile = classFile,
                 threadProxy = threadProxy,
-                commonTypeResolver = commonTypeResolver
+                commonTypeResolver = commonTypeResolver,
+                process = process
         )
     }
-
-    session.process.onHotSwapFinished()
-
     return true
 }
 
@@ -242,9 +269,7 @@ private fun <T : Any> DebugProcessImpl.invokeInManagerThread(f: (DebuggerContext
     var result: T? = null
     val command: DebuggerCommandImpl = object : DebuggerCommandImpl() {
         override fun action() {
-            result = ApplicationManager.getApplication().runReadAction(Computable {
-                f(debuggerContext)
-            })
+            result = f(debuggerContext)
         }
     }
 

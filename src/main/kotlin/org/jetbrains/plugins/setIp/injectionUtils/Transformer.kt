@@ -2,12 +2,14 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.jetbrains.org.objectweb.asm.*
 
-internal const val firstStopCodeIndex = 4L
+internal const val firstStopCodeIndex = 5L
+internal const val jumpSwitchVariableName = "\$SETIP\$"
 
 internal class Transformer(
         private val methodName: MethodName,
         private val line: Int,
         private val locals: List<Pair<Type, Int>>,
+        private val methodLocalsCount: Int,
         private val argumentsCount: Int,
         visitor: ClassVisitor
 ) : ClassVisitor(Opcodes.ASM6, visitor) {
@@ -68,20 +70,21 @@ internal class Transformer(
 
         override fun visitCode() {
 
-            val extraVariable = locals.maxBy { it.second }?.let { it.second + 1 } ?: 0
+            val extraVariable = methodLocalsCount
 
             val labelOnStart = Label()
             val labelOnFinish = Label()
 
-            super.visitLabel(labelOnStart)
 
             super.visitLdcInsn(0)
             super.visitVarInsn(Opcodes.ISTORE, extraVariable)
+            super.visitLabel(labelOnStart)
+
             // THIS MAGIC NOP HAVE TO BE HERE
             // There is two variants are possible: ldc and ldc_w
             // To make possible to stop AFTER istore BUT before iload we need determine iload index (that could be #4 or #5)
             // But ASM not giving to us what index we should choose so the workaround is to choose index #4 with extra nop.
-            // With this workaround we get that index #4 points either on nop or iload command, as required.
+            // With this workaround we get that index #5 [firstStopCodeIndex] points either on nop or iload command, as required.
             super.visitInsn(Opcodes.NOP)
             super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
 
@@ -96,7 +99,7 @@ internal class Transformer(
 
             super.visitLabel(labelOnFinish)
 
-            super.visitLocalVariable("$$", "I", null, labelOnStart, labelOnFinish, extraVariable)
+            super.visitLocalVariable(jumpSwitchVariableName, "I", null, labelOnStart, labelOnFinish, extraVariable)
 
             super.visitCode()
         }

@@ -1,10 +1,12 @@
 package org.jetbrains.plugins.setIp
 
-import com.intellij.debugger.engine.DebugProcessEvents
+import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.sun.jdi.*
-import com.sun.jdi.request.EventRequestManager
+import com.sun.jdi.ClassType
+import com.sun.jdi.Value
+import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
 internal fun debuggerJump(
@@ -12,19 +14,21 @@ internal fun debuggerJump(
         declaredType: ClassType,
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
-        commonTypeResolver: CommonTypeResolver
+        commonTypeResolver: CommonTypeResolver,
+        process: DebugProcessImpl
 ) {
-    val currentFrame = threadProxy.frame(0)
+    fun currentFrame() = threadProxy.frame(0)
 
-    val method = currentFrame.location().method()
+    val method = currentFrame().location().method()
 
+    val methodName = method.methodName
     val arguments = method.arguments()
 
     val argumentsCount = arguments.size + if (!method.isStatic) 1 else 0
 
     val classToRedefine = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
-            targetMethod = method.methodName,
+            targetMethod = methodName,
             argumentsCount = argumentsCount,
             klass = originalClassFile,
             commonTypeResolver = commonTypeResolver
@@ -35,19 +39,25 @@ internal fun debuggerJump(
     val machine = threadProxy.virtualMachineProxy
 
     val localVariables =
-            currentFrame.visibleVariables()
+            currentFrame().visibleVariables()
                     .filterNot { arguments.contains(it.variable) }
-                    .map { it.name() to currentFrame.getValue(it) }
+                    .map { it.name() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
-    threadProxy.popFrames(currentFrame)
+//    threadProxy.popFrames(currentFrame())
+    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, process.debuggerContext.frameProxy) as DebuggerContextCommandImpl
+    popFrameCommand.threadAction(process.debuggerContext.suspendContext!!)
 
-    val methodName = method.name()
-    val signature = method.signature()
+    //JRE STEPPING BUG PATCH
+    val lineTablePatchStepRequest = machine.eventRequestManager().createStepRequest(threadProxy.threadReference, StepRequest.STEP_LINE, StepRequest.STEP_OVER)
+    lineTablePatchStepRequest.enable()
+    lineTablePatchStepRequest.disable()
+    //JRE STEPPING BUG PATCH END
 
     machine.redefineClasses(mapOf(declaredType to classToRedefine))
+    process.onHotSwapFinished()
 
-    val newMethod = declaredType.concreteMethodByName(methodName, signature)
+    val newMethod = declaredType.concreteMethodByName(methodName.name, methodName.signature)
             ?: return unitWithLog("Cannot find refurbished method with given name and signature")
 
     val stopPreloadLocation = newMethod.locationOfCodeIndex(firstStopCodeIndex)
@@ -64,54 +74,45 @@ internal fun debuggerJump(
             } ?: false
 
 
-    with(machine.eventRequestManager()) {
-        jumpToLocationAndRun(stopPreloadLocation) {
+    val breakpoint2 = InstrumentationMethodBreakpoint(process.project, stopPreloadLocation) {
+        with(threadProxy.frame(0)) {
+            if (!trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
+                unitWithLog("Failed to set SETIP variable")
+                return@InstrumentationMethodBreakpoint false
+            }
+        }
+        false //Means not stop!
+    }
+    breakpoint2.createRequest(process)
+
+    val breakpoint = InstrumentationMethodBreakpoint(process.project, targetLocation) {
+        localVariables.forEach {
             with(threadProxy.frame(0)) {
-
-                if (!trySetValue("$$", machine.mirrorOf(1))) {
-                    return@jumpToLocationAndRun
-                }
-
-                jumpToLocationAndRun(targetLocation) {
-                    machine.suspend()
-
-                    localVariables.forEach {
-                        trySetValue(it.first, it.second)
-                    }
-                }
+                trySetValue(it.first, it.second)
             }
         }
+        true //Means stop!
     }
+    breakpoint.createRequest(process)
 
-    machine.resume()
-}
-
-private fun EventRequestManager.jumpToLocationAndRun(location: Location, action: () -> Unit) {
-    with(createBreakpointRequest(location)) {
-        enable()
-        DebugProcessEvents.enableRequestWithHandler(this) {
-            disable()
-            action()
-        }
+    process.suspendManager.run {
+        resume(pausedContext)
     }
 }
 
-internal fun ThreadReferenceProxyImpl.jumpByFrameDrop() {
+internal fun jumpByFrameDrop(
+        threadProxy: ThreadReferenceProxyImpl,
+        process: DebugProcessImpl)
+{
+    val suspendContext = process.debuggerContext.suspendContext!!
 
-    with(frame(0)) {
-        val minLocation = location().method()
-                .allLineLocations()
-                .minBy { it.lineNumber() }
-                ?: return unitWithLog("Could not find min method location")
+    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, process.debuggerContext.frameProxy) as DebuggerContextCommandImpl
+    popFrameCommand.threadAction(suspendContext)
 
-        popFrames(this)
+    val lineTablePatchStepRequest = threadProxy.virtualMachine.eventRequestManager().createStepRequest(threadProxy.threadReference, StepRequest.STEP_LINE, StepRequest.STEP_INTO)
+    lineTablePatchStepRequest.enable()
 
-        with(virtualMachineProxy) {
-            eventRequestManager().jumpToLocationAndRun(minLocation) {
-                suspend()
-            }
-            resume()
-        }
-
+    process.suspendManager.run {
+        resume(pausedContext)
     }
 }
