@@ -128,9 +128,12 @@ internal class LocalVariableAnalyzer private constructor(
             val variable = local[index]
             requireNotNull(variable) { "Unexpected local variable null" }
             val convertedType = variable.convertToType()
-            requireNotNull(convertedType) { "Unexpected local variable converted type null" }
-            resultBuilder.add(convertedType to currentLocalIndex)
-            currentLocalIndex += convertedType.indexShiftSize
+            if (convertedType != null) {
+                resultBuilder.add(convertedType to currentLocalIndex)
+                currentLocalIndex += convertedType.indexShiftSize
+            } else {
+                currentLocalIndex++
+            }
         }
 
         linesExpectedFromFrame.forEach {
