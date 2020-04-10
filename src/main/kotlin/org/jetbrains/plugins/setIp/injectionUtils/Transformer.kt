@@ -81,10 +81,11 @@ internal class Transformer(
             super.visitLabel(labelOnStart)
 
             // THIS MAGIC NOP HAVE TO BE HERE
-            // There is two variants are possible: ldc and ldc_w
-            // To make possible to stop AFTER istore BUT before iload we need determine iload index (that could be #4 or #5)
-            // But ASM not giving to us what index we should choose so the workaround is to choose index #4 with extra nop.
-            // With this workaround we get that index #5 [firstStopCodeIndex] points either on nop or iload command, as required.
+            // There is four variants are possible: ldc and ldc_w either as istore_N or istore indexes
+            // We need to stop AFTER istore (index could be #2 or #3 or #4) BUT before/on iload (index could be #5 or #6 or #7)
+            // But ASM not giving us what index we should choose so the workaround is to choose index #5 with extra nop's.
+            // With this workaround we assume that index #5 [firstStopCodeIndex] points either on one of nop's or iload command, as required.
+            super.visitInsn(Opcodes.NOP)
             super.visitInsn(Opcodes.NOP)
             super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
 
