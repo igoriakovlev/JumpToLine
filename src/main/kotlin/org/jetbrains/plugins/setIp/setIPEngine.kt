@@ -8,7 +8,6 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
-import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
@@ -16,13 +15,12 @@ import com.intellij.debugger.impl.DebuggerContextImpl
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Computable
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
+import com.sun.jdi.request.EventRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T): T {
@@ -53,19 +51,22 @@ private const val SOME_ERROR = "Not available in current for some reason :("
 private const val MAIN_FUNCTION_CALL = "SetIP is not available for main function call"
 private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top frames"
 private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
-private const val CONSTRUCTORS_NOT_SUPPORTED = "SetIP does not supports for init"
 private const val AVAILABLE = "Grab to change execution position"
+private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
 private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionImpl): Pair<Boolean, String> {
     val process = session.process
 
-    if (!process.virtualMachineProxy.isSuspended) return false to NOT_SUSPENDED
-
     if (!xsession.isSuspended) return false to NOT_SUSPENDED
 
     if (!xsession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
+
+    if (process.suspendManager.pausedContext.suspendPolicy != EventRequest.SUSPEND_ALL)
+        return false to NOT_ALL_THREADS_ARE_SUSPENDED
+
+    if (!process.virtualMachineProxy.isSuspended) return false to NOT_SUSPENDED
 
     val context = process.debuggerContext
     val threadProxy = context.threadProxy ?: return false to SOME_ERROR
@@ -75,8 +76,6 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
     if (threadProxy.frameCount() < 2) return false to MAIN_FUNCTION_CALL
 
     val method = threadProxy.frame(0)?.location()?.method() ?: return false to SOME_ERROR
-
-    if (method.isConstructor) return false to CONSTRUCTORS_NOT_SUPPORTED
 
     if (method.signature().matches(coroutineRegex)) return false to COROUTINE_SUSPECTED
 
@@ -103,7 +102,7 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
 }
 
 internal sealed class GetLinesToJumpResult
-internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray) : GetLinesToJumpResult()
+internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray?) : GetLinesToJumpResult()
 internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
@@ -114,7 +113,7 @@ internal fun tryGetLinesToJump(
 }
 
 private class StrataViaLocationTranslator(
-        private val currentLocation: Location,
+        currentLocation: Location,
         private val actualStratum: String
 ): LineTranslator {
 
@@ -133,6 +132,9 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
 
     val process = session.process
 
+    if (process.suspendManager.pausedContext.suspendPolicy != EventRequest.SUSPEND_ALL)
+        return nullWithLog("Available only when all threads are suspended")
+
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
 
     val context = process.debuggerContext
@@ -142,8 +144,33 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
     val frame = context.frameProxy ?: return nullWithLog("Cannot get frameProxy")
 
     val location = frame.location()
-
+    val method = location.method()
     val classType = location.declaringType() as? ClassType ?: return nullWithLog("Invalid type to jump")
+
+    //create line translator for Kotlin if able
+    val lineTranslator = classType.availableStrata()?.let {
+        if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
+    }
+
+    val isCtorOrRecursive = method.isConstructor || checkIsTopMethodRecursive(location, threadProxy)
+    if (isCtorOrRecursive) {
+        val javaLine = method.allLineLocations()
+                .map { it.lineNumber("Java") }
+                .min()
+                ?: return UnknownErrorResult
+
+        val translatedLine = lineTranslator?.translate(javaLine) ?: javaLine
+
+        val firstLineAnalyze = LocalVariableAnalyzeResult(
+                javaLine = javaLine,
+                sourceLine = translatedLine,
+                locals = emptyList(),
+                isSafeLine = true,
+                isFirstLine = true,
+                methodLocalsCount = 0
+        )
+        return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null)
+    }
 
     val classFile = threadProxy.threadReference.tryGetTypeByteCode(classType)
     classFile ?: run {
@@ -151,24 +178,12 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
         return ClassNotFoundErrorResult
     }
 
-    //create line translator for Kotlin if able
-    val lineTranslator = classType.availableStrata()?.let {
-        if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
-    }
-
-    val result = getAvailableGotoLines(
+    val availableLines = getAvailableGotoLines(
             ownerTypeName = classType.name(),
-            targetMethod = location.method().methodName,
+            targetMethod = method.methodName,
             lineTranslator = lineTranslator,
             klass = classFile
     ) ?: return nullWithLog("Cannot get available goto lines")
-
-    val isRecursive = false //checkIsTopMethodRecursive(frame.location(), threadProxy)
-
-    val availableLines =
-            if (isRecursive) result.firstOrNull { it.isFirstLine }?.let { listOf(it) } else result
-
-    availableLines ?: return null
 
     return JumpLinesInfo(availableLines, classFile)
 }
@@ -177,11 +192,9 @@ internal fun tryJumpToSelectedLine(
     session: DebuggerSession,
     project: Project,
     targetLineInfo: LocalVariableAnalyzeResult,
-    classFile: ByteArray,
+    classFile: ByteArray?,
     commonTypeResolver: CommonTypeResolver
-): Boolean {
-
-
+) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
 
@@ -197,7 +210,7 @@ internal fun tryJumpToSelectedLine(
                 StackCapturingLineBreakpoint.createAll(session.process)
             }
 
-            /*result =*/ tryJumpToSelectedLineImpl(
+            tryJumpToSelectedLineImpl(
                     session = session,
                     classFile = classFile,
                     targetLineInfo = targetLineInfo,
@@ -209,56 +222,33 @@ internal fun tryJumpToSelectedLine(
         }
     }
     session.process.managerThread.schedule(command)
-
-    return true
-//    return runInDebuggerThread(session) {
-//        session.process.let {
-//
-//            val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-//            breakpointManager.disableBreakpoints(it)
-//            StackCapturingLineBreakpoint.deleteAll(it)
-//
-//            val result = tryJumpToSelectedLineImpl(
-//                    session = session,
-//                    classFile = classFile,
-//                    targetLineInfo = targetLineInfo,
-//                    commonTypeResolver = commonTypeResolver
-//            )
-//
-//            breakpointManager.enableBreakpoints(it)
-//            StackCapturingLineBreakpoint.createAll(it)
-//
-//            result
-//        }
-//    }
 }
 
 private fun tryJumpToSelectedLineImpl(
     session: DebuggerSession,
     targetLineInfo: LocalVariableAnalyzeResult,
-    classFile: ByteArray,
+    classFile: ByteArray?,
     commonTypeResolver: CommonTypeResolver,
     suspendContext: SuspendContextImpl,
     suspendBreakpoints: () -> Unit,
     resumeBreakpoints: () -> Unit
-): Boolean {
-
+) {
     val process = session.process
 
     val context = process.debuggerContext
-    val threadProxy = context.threadProxy ?: return falseWithLog("Cannot get threadProxy")
+    val threadProxy = context.threadProxy ?: return unitWithLog("Cannot get threadProxy")
 
-    if (!threadProxy.isSuspended) return falseWithLog("Calling jump on unsuspended thread")
+    if (!threadProxy.isSuspended) return unitWithLog("Calling jump on unsuspended thread")
 
-    if (threadProxy.frameCount() < 2) return falseWithLog("frameCount < 2")
+    if (threadProxy.frameCount() < 2) return unitWithLog("frameCount < 2")
 
-    val frame = context.frameProxy ?: return falseWithLog("Cannot get frameProxy")
+    val frame = context.frameProxy ?: return unitWithLog("Cannot get frameProxy")
 
     val location = frame.location()
 
-    if (location.lineNumber("Java") == targetLineInfo.javaLine) return falseWithLog("Current line selected")
+    if (location.lineNumber("Java") == targetLineInfo.javaLine) return unitWithLog("Current line selected")
 
-    val classType = location.declaringType() as? ClassType ?: return falseWithLog("Invalid location type")
+    val classType = location.declaringType() as? ClassType ?: return unitWithLog("Invalid location type")
 
     if (targetLineInfo.isFirstLine) {
         jumpByFrameDrop(
@@ -266,10 +256,11 @@ private fun tryJumpToSelectedLineImpl(
                 suspendContext = suspendContext
         )
     } else {
+        val checkedClassFile = classFile ?: return unitWithLog("Cannot jump to not-first-line without class file")
         debuggerJump(
                 targetLineInfo = targetLineInfo,
                 declaredType = classType,
-                originalClassFile = classFile,
+                originalClassFile = checkedClassFile,
                 threadProxy = threadProxy,
                 commonTypeResolver = commonTypeResolver,
                 process = process,
@@ -278,7 +269,6 @@ private fun tryJumpToSelectedLineImpl(
                 resumeBreakpoints = resumeBreakpoints
         )
     }
-    return true
 }
 
 private fun <T : Any> DebugProcessImpl.invokeInManagerThread(f: (DebuggerContextImpl) -> T?): T? {
