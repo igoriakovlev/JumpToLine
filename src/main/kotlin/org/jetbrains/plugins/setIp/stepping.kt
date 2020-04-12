@@ -1,14 +1,28 @@
 package org.jetbrains.plugins.setIp
 
+import com.intellij.debugger.DebuggerManagerEx
+import com.intellij.debugger.engine.DebugProcess
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
-import com.intellij.debugger.jdi.StackFrameProxyImpl
+import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.sun.jdi.ClassType
-import com.sun.jdi.Value
+import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
+import com.sun.jdi.*
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
+
+private fun DebugProcessImpl.suspendBreakpoints() {
+    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+    breakpointManager.disableBreakpoints(this)
+    StackCapturingLineBreakpoint.deleteAll(this)
+}
+
+private fun DebugProcessImpl.resumeBreakpoints() {
+    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+    breakpointManager.enableBreakpoints(this)
+    StackCapturingLineBreakpoint.createAll(this)
+}
 
 internal fun debuggerJump(
         targetLineInfo: LocalVariableAnalyzeResult,
@@ -17,9 +31,7 @@ internal fun debuggerJump(
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver,
         process: DebugProcessImpl,
-        suspendContext: SuspendContextImpl,
-        suspendBreakpoints: () -> Unit,
-        resumeBreakpoints: () -> Unit
+        suspendContext: SuspendContextImpl
 ) {
     fun currentFrame() = threadProxy.frame(0)
 
@@ -48,9 +60,8 @@ internal fun debuggerJump(
                     .map { it.name() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
-    suspendBreakpoints()
+    process.suspendBreakpoints()
 
-//    threadProxy.popFrames(currentFrame())
     val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
 
@@ -73,34 +84,39 @@ internal fun debuggerJump(
             .minBy { it.codeIndex() }
             ?: return unitWithLog("Cannot find target location")
 
-    fun StackFrameProxyImpl.trySetValue(name: String, value: Value) =
+    fun StackFrame.trySetValue(name: String, value: Value) =
             visibleVariableByName(name)?.let {
                 setValue(it, value)
                 true
             } ?: false
 
+    InstrumentationMethodBreakpoint(process.project, stopPreloadLocation) {
 
-    val breakpoint2 = InstrumentationMethodBreakpoint(process.project, stopPreloadLocation) {
-        with(threadProxy.forceFrames()[0]) {
-            if (!trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
-                unitWithLog("Failed to set SETIP variable")
-            }
+        fun ThreadReferenceProxyImpl.forceFramesAndGetFirst() = forceFrames()
+                .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
+
+        val stackSwitchFrame = threadProxy.forceFramesAndGetFirst()
+                ?: return@InstrumentationMethodBreakpoint true
+
+        if (!stackSwitchFrame.trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
+            unitWithLog("Failed to set SETIP variable")
+            return@InstrumentationMethodBreakpoint true
         }
+
+        InstrumentationMethodBreakpoint(process.project, targetLocation) {
+            val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
+
+            if (stackTargetFrame != null) {
+                localVariables.forEach {
+                    stackTargetFrame.trySetValue(it.first, it.second)
+                }
+            }
+            process.resumeBreakpoints()
+            true //Means stop!
+        }.createRequest(process)
+
         false //Means not stop!
-    }
-    breakpoint2.createRequest(process)
-
-    val breakpoint = InstrumentationMethodBreakpoint(process.project, targetLocation) {
-        threadProxy.forceFrames()
-        localVariables.forEach {
-            with(threadProxy.forceFrames()[0]) {
-                trySetValue(it.first, it.second)
-            }
-        }
-        resumeBreakpoints()
-        true //Means stop!
-    }
-    breakpoint.createRequest(process)
+    }.createRequest(process)
 
     process.suspendManager.run {
         resume(pausedContext)

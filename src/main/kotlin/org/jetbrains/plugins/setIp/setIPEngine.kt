@@ -190,34 +190,18 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
 
 internal fun tryJumpToSelectedLine(
     session: DebuggerSession,
-    project: Project,
     targetLineInfo: LocalVariableAnalyzeResult,
     classFile: ByteArray?,
     commonTypeResolver: CommonTypeResolver
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-
-            val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-
-            val suspendBreakpoints = {
-                breakpointManager.disableBreakpoints(suspendContext.debugProcess)
-                StackCapturingLineBreakpoint.deleteAll(suspendContext.debugProcess)
-            }
-
-            val resumeBreakpoints = {
-                breakpointManager.enableBreakpoints(session.process)
-                StackCapturingLineBreakpoint.createAll(session.process)
-            }
-
             tryJumpToSelectedLineImpl(
                     session = session,
                     classFile = classFile,
                     targetLineInfo = targetLineInfo,
                     commonTypeResolver = commonTypeResolver,
-                    suspendContext = suspendContext,
-                    suspendBreakpoints = suspendBreakpoints,
-                    resumeBreakpoints = resumeBreakpoints
+                    suspendContext = suspendContext
             )
         }
     }
@@ -229,9 +213,7 @@ private fun tryJumpToSelectedLineImpl(
     targetLineInfo: LocalVariableAnalyzeResult,
     classFile: ByteArray?,
     commonTypeResolver: CommonTypeResolver,
-    suspendContext: SuspendContextImpl,
-    suspendBreakpoints: () -> Unit,
-    resumeBreakpoints: () -> Unit
+    suspendContext: SuspendContextImpl
 ) {
     val process = session.process
 
@@ -264,9 +246,7 @@ private fun tryJumpToSelectedLineImpl(
                 threadProxy = threadProxy,
                 commonTypeResolver = commonTypeResolver,
                 process = process,
-                suspendContext = suspendContext,
-                suspendBreakpoints = suspendBreakpoints,
-                resumeBreakpoints = resumeBreakpoints
+                suspendContext = suspendContext
         )
     }
 }

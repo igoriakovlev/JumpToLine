@@ -27,7 +27,6 @@ internal class SetIPArrowGutter(
 
         tryJumpToSelectedLine(
                 session = session,
-                project = project,
                 targetLineInfo = selected,
                 classFile = jumpInfo.classFile,
                 commonTypeResolver = commonTypeResolver
