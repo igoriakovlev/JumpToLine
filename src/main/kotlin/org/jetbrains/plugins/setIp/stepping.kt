@@ -1,6 +1,7 @@
 package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
@@ -15,7 +16,10 @@ internal fun debuggerJump(
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver,
-        process: DebugProcessImpl
+        process: DebugProcessImpl,
+        suspendContext: SuspendContextImpl,
+        suspendBreakpoints: () -> Unit,
+        resumeBreakpoints: () -> Unit
 ) {
     fun currentFrame() = threadProxy.frame(0)
 
@@ -44,9 +48,11 @@ internal fun debuggerJump(
                     .map { it.name() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
+    suspendBreakpoints()
+
 //    threadProxy.popFrames(currentFrame())
-    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, process.debuggerContext.frameProxy) as DebuggerContextCommandImpl
-    popFrameCommand.threadAction(process.debuggerContext.suspendContext!!)
+    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
+    popFrameCommand.threadAction(suspendContext)
 
     //JRE STEPPING BUG PATCH
     val lineTablePatchStepRequest = machine.eventRequestManager().createStepRequest(threadProxy.threadReference, StepRequest.STEP_LINE, StepRequest.STEP_OVER)
@@ -75,10 +81,9 @@ internal fun debuggerJump(
 
 
     val breakpoint2 = InstrumentationMethodBreakpoint(process.project, stopPreloadLocation) {
-        with(threadProxy.frame(0)) {
+        with(threadProxy.forceFrames()[0]) {
             if (!trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
                 unitWithLog("Failed to set SETIP variable")
-                return@InstrumentationMethodBreakpoint false
             }
         }
         false //Means not stop!
@@ -86,11 +91,13 @@ internal fun debuggerJump(
     breakpoint2.createRequest(process)
 
     val breakpoint = InstrumentationMethodBreakpoint(process.project, targetLocation) {
+        threadProxy.forceFrames()
         localVariables.forEach {
-            with(threadProxy.frame(0)) {
+            with(threadProxy.forceFrames()[0]) {
                 trySetValue(it.first, it.second)
             }
         }
+        resumeBreakpoints()
         true //Means stop!
     }
     breakpoint.createRequest(process)
@@ -101,18 +108,12 @@ internal fun debuggerJump(
 }
 
 internal fun jumpByFrameDrop(
-        threadProxy: ThreadReferenceProxyImpl,
-        process: DebugProcessImpl)
+        process: DebugProcessImpl,
+        suspendContext: SuspendContextImpl)
 {
-    val suspendContext = process.debuggerContext.suspendContext!!
-
-    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, process.debuggerContext.frameProxy) as DebuggerContextCommandImpl
+    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
 
-    val lineTablePatchStepRequest = threadProxy.virtualMachine.eventRequestManager().createStepRequest(threadProxy.threadReference, StepRequest.STEP_LINE, StepRequest.STEP_INTO)
-    lineTablePatchStepRequest.enable()
-
-    process.suspendManager.run {
-        resume(pausedContext)
-    }
+    val stepInCommand = process.createStepIntoCommand(process.suspendManager.pausedContext, true, null)
+    stepInCommand.action()
 }

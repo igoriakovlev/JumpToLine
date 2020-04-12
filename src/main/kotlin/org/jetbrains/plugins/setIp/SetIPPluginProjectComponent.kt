@@ -21,18 +21,18 @@ import java.nio.file.Files
 class SetIPPluginProjectComponent(private val project: Project) : ProjectComponent {
 
     private fun instrument() {
-        val file = Files.readAllBytes(File("C:\\AAA\\AbstractFindUsagesWithDisableComponentSearchTest\\Original.class").toPath())
-        val methodName = MethodName("findUsagesAndCheckResults", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/intellij/psi/PsiElement;Lcom/intellij/find/findUsages/FindUsagesOptions;Lcom/intellij/openapi/project/Project;Z)V", null)
+        val file = Files.readAllBytes(File("C:\\AAA\\KtUltraLightClass.class").toPath())
+        val methodName = MethodName("ownMethods", "()Ljava/util/List;", null)
 
         val result = getAvailableGotoLines(
-                ownerTypeName = "org/jetbrains/kotlin/findUsages/AbstractFindUsagesTestKt",
+                ownerTypeName = "org/jetbrains/kotlin/asJava/classes/KtUltraLightClass",
                 targetMethod = methodName,
                 lineTranslator = null,
                 klass = file
         )
 
-        val line = result?.firstOrNull { it.javaLine == 250 } ?: return
-        val argumentsCount = 7
+        val line = result?.firstOrNull { it.sourceLine == 270 } ?: return
+        val argumentsCount = 1
 
         val classToRedefine = updateClassWithGotoLinePrefix(
                 targetLineInfo = line,

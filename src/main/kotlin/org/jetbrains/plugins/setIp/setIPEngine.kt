@@ -8,6 +8,7 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
+import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
@@ -183,19 +184,28 @@ internal fun tryJumpToSelectedLine(
 
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
+
             val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-            breakpointManager.disableBreakpoints(suspendContext.debugProcess)
-            StackCapturingLineBreakpoint.deleteAll(suspendContext.debugProcess)
+
+            val suspendBreakpoints = {
+                breakpointManager.disableBreakpoints(suspendContext.debugProcess)
+                StackCapturingLineBreakpoint.deleteAll(suspendContext.debugProcess)
+            }
+
+            val resumeBreakpoints = {
+                breakpointManager.enableBreakpoints(session.process)
+                StackCapturingLineBreakpoint.createAll(session.process)
+            }
 
             /*result =*/ tryJumpToSelectedLineImpl(
                     session = session,
                     classFile = classFile,
                     targetLineInfo = targetLineInfo,
-                    commonTypeResolver = commonTypeResolver
+                    commonTypeResolver = commonTypeResolver,
+                    suspendContext = suspendContext,
+                    suspendBreakpoints = suspendBreakpoints,
+                    resumeBreakpoints = resumeBreakpoints
             )
-
-            breakpointManager.enableBreakpoints(suspendContext.debugProcess)
-            StackCapturingLineBreakpoint.createAll(suspendContext.debugProcess)
         }
     }
     session.process.managerThread.schedule(command)
@@ -227,7 +237,10 @@ private fun tryJumpToSelectedLineImpl(
     session: DebuggerSession,
     targetLineInfo: LocalVariableAnalyzeResult,
     classFile: ByteArray,
-    commonTypeResolver: CommonTypeResolver
+    commonTypeResolver: CommonTypeResolver,
+    suspendContext: SuspendContextImpl,
+    suspendBreakpoints: () -> Unit,
+    resumeBreakpoints: () -> Unit
 ): Boolean {
 
     val process = session.process
@@ -249,8 +262,8 @@ private fun tryJumpToSelectedLineImpl(
 
     if (targetLineInfo.isFirstLine) {
         jumpByFrameDrop(
-                threadProxy = threadProxy,
-                process = process
+                process = process,
+                suspendContext = suspendContext
         )
     } else {
         debuggerJump(
@@ -259,7 +272,10 @@ private fun tryJumpToSelectedLineImpl(
                 originalClassFile = classFile,
                 threadProxy = threadProxy,
                 commonTypeResolver = commonTypeResolver,
-                process = process
+                process = process,
+                suspendContext = suspendContext,
+                suspendBreakpoints = suspendBreakpoints,
+                resumeBreakpoints = resumeBreakpoints
         )
     }
     return true
