@@ -5,10 +5,14 @@
   <vendor email="igor.yakovlev@jetbrains.com" url="jetbrains.com">Igor Yakovlev</vendor>
 
   <depends>com.intellij.modules.lang</depends>
+  <idea-version since-build="193"/>
+
+  <!--
+  <depends>com.intellij.modules.lang</depends>
+  <idea-version since-build="201"/>
+  -->
 
   <description>Moves your execution point anywhere possible position</description>
-
-  <idea-version since-build="191"/>
 
   <project-components>
     <component>
