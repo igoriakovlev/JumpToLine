@@ -5,7 +5,6 @@
 
 package org.jetbrains.plugins.setIp
 
-import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
 import com.intellij.debugger.engine.SuspendContextImpl
@@ -14,13 +13,10 @@ import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
-import com.intellij.openapi.project.Project
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
-import com.sun.jdi.request.EventRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T): T {
@@ -62,9 +58,6 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
     if (!xsession.isSuspended) return false to NOT_SUSPENDED
 
     if (!xsession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
-
-    if (process.suspendManager.pausedContext.suspendPolicy != EventRequest.SUSPEND_ALL)
-        return false to NOT_ALL_THREADS_ARE_SUSPENDED
 
     if (!process.virtualMachineProxy.isSuspended) return false to NOT_SUSPENDED
 
@@ -131,9 +124,6 @@ private class StrataViaLocationTranslator(
 private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResult? {
 
     val process = session.process
-
-    if (process.suspendManager.pausedContext.suspendPolicy != EventRequest.SUSPEND_ALL)
-        return nullWithLog("Available only when all threads are suspended")
 
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
 

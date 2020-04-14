@@ -7,7 +7,6 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.sun.jdi.Location
 import com.sun.jdi.event.LocatableEvent
-import com.sun.jdi.request.EventRequest.SUSPEND_ALL
 
 internal class InstrumentationMethodBreakpoint(project: Project, private val location: Location, private val action: () -> Boolean) : SyntheticLineBreakpoint(project) {
     override fun createRequest(debugProcess: DebugProcessImpl) {
