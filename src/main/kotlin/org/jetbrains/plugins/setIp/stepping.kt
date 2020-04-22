@@ -1,14 +1,14 @@
 package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.DebuggerManagerEx
-import com.intellij.debugger.engine.DebugProcess
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
-import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
+import com.intellij.openapi.project.Project
 import com.sun.jdi.*
+import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
@@ -22,6 +22,16 @@ private fun DebugProcessImpl.resumeBreakpoints() {
     val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
     breakpointManager.enableBreakpoints(this)
     StackCapturingLineBreakpoint.createAll(this)
+}
+
+/**
+ * JRE Stepping bug patch after class redefinition
+ * SHOULD be called on location with different method other from redefinition method
+ */
+private fun jreSteppingBugPatch(eventRequestManager: EventRequestManager, threadReference: ThreadReference) {
+    val lineTablePatchStepRequest = eventRequestManager.createStepRequest(threadReference, StepRequest.STEP_LINE, StepRequest.STEP_OVER)
+    lineTablePatchStepRequest.enable()
+    lineTablePatchStepRequest.disable()
 }
 
 internal fun debuggerJump(
@@ -65,11 +75,7 @@ internal fun debuggerJump(
     val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
 
-    //JRE STEPPING BUG PATCH
-    val lineTablePatchStepRequest = machine.eventRequestManager().createStepRequest(threadProxy.threadReference, StepRequest.STEP_LINE, StepRequest.STEP_OVER)
-    lineTablePatchStepRequest.enable()
-    lineTablePatchStepRequest.disable()
-    //JRE STEPPING BUG PATCH END
+    jreSteppingBugPatch(machine.eventRequestManager(), threadProxy.threadReference)
 
     machine.redefineClasses(mapOf(declaredType to classToRedefine))
     process.onHotSwapFinished()
@@ -90,20 +96,20 @@ internal fun debuggerJump(
                 true
             } ?: false
 
-    InstrumentationMethodBreakpoint(process.project, stopPreloadLocation) {
+    InstrumentationMethodBreakpoint(process, stopPreloadLocation, stopAfterAction = false) {
 
         fun ThreadReferenceProxyImpl.forceFramesAndGetFirst() = forceFrames()
                 .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
 
         val stackSwitchFrame = threadProxy.forceFramesAndGetFirst()
-                ?: return@InstrumentationMethodBreakpoint true
+                ?: throw IllegalStateException("Failed to get frame on stack")
 
         if (!stackSwitchFrame.trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
-            unitWithLog("Failed to set SETIP variable")
-            return@InstrumentationMethodBreakpoint true
+            throw IllegalStateException("Failed to set SETIP variable")
         }
 
-        InstrumentationMethodBreakpoint(process.project, targetLocation) {
+        InstrumentationMethodBreakpoint(process, targetLocation, stopAfterAction = true) {
+
             val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
 
             if (stackTargetFrame != null) {
@@ -112,15 +118,11 @@ internal fun debuggerJump(
                 }
             }
             process.resumeBreakpoints()
-            true //Means stop!
-        }.createRequest(process)
-
-        false //Means not stop!
-    }.createRequest(process)
-
-    process.suspendManager.run {
-        resume(pausedContext)
+        }
     }
+
+    val resumeThread = process.createResumeCommand(process.suspendManager.pausedContext)
+    resumeThread.run()
 }
 
 internal fun jumpByFrameDrop(
