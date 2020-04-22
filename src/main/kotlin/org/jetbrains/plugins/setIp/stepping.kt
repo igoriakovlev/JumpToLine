@@ -96,7 +96,7 @@ internal fun debuggerJump(
                 true
             } ?: false
 
-    InstrumentationMethodBreakpoint(process, stopPreloadLocation, stopAfterAction = false) {
+    InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false) {
 
         fun ThreadReferenceProxyImpl.forceFramesAndGetFirst() = forceFrames()
                 .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
@@ -108,7 +108,7 @@ internal fun debuggerJump(
             throw IllegalStateException("Failed to set SETIP variable")
         }
 
-        InstrumentationMethodBreakpoint(process, targetLocation, stopAfterAction = true) {
+        InstrumentationMethodBreakpoint(process, threadProxy, targetLocation, stopAfterAction = true) {
 
             val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
 
