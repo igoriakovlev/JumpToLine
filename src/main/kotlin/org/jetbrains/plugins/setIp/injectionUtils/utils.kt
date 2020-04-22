@@ -1,14 +1,10 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import org.jetbrains.org.objectweb.asm.ClassReader
-import java.io.*
-import java.nio.file.Files
 import com.intellij.openapi.diagnostic.Logger
+import java.io.File
+import java.io.FileOutputStream
 
 private val logger = Logger.getInstance("SetIP Plugin")
-
-internal fun falseWithLog( message: String): Boolean
-        = false.apply { logger.warn(message) }
 
 internal fun <T> nullWithLog(message: String): T?
         = null.apply { logger.warn(message) }
@@ -19,14 +15,14 @@ internal fun unitWithLog(message: String): Unit
 internal fun Throwable.logException(): Unit
         = logger.error(this)
 
-
-@Suppress("UNREACHABLE_CODE")
 internal fun dumpClass(originalClass: ByteArray, pathedClass: ByteArray) {
-    //return
-    FileOutputStream("C:\\AAA\\Original.class").use {
+    val path = System.getProperty("set.ip.dump.class.path")
+    if (path.isNullOrBlank() || !File(path).isDirectory) return
+
+    FileOutputStream("$path\\Original.class").use {
         it.write(originalClass)
     }
-    FileOutputStream("C:\\AAA\\Patched.class").use {
+    FileOutputStream("$path\\Patched.class").use {
         it.write(pathedClass)
     }
 }
