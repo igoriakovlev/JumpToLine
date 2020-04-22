@@ -1,6 +1,9 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
+import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.ui.breakpoints.Breakpoint
 import com.sun.jdi.*
+import java.util.*
 
 private fun ThreadReference.invokeInstance(
         obj: ObjectReference,
@@ -20,24 +23,39 @@ private fun ThreadReference.invokeStatic(
         parameters: List<Value>
 ) = klass.invokeMethod(this, klass.concreteMethodByName(name, signature), parameters, 0)
 
-fun ThreadReference.tryGetTypeByteCode(targetType: ClassType): ByteArray? = try {
-    tryGetTypeByteCodeImpl(targetType)
-} catch (e: Exception) { null }
+internal fun DebugProcessImpl.tryGetTypeByteCode(
+        threadReference: ThreadReference,
+        targetType: ClassType
+): ByteArray? = methodByteCodeCache.getOrPut(targetType) {
+    val bpStates = suspendBreakpoints()
+    try {
+        threadReference.tryGetTypeByteCodeImpl(targetType)
+    } catch (e: Exception) { null }
+    finally {
+        resumeBreakpoints(bpStates)
+    }
+}
+
+
+private val classTypeCache = WeakHashMap<VirtualMachine, MutableMap<String, ClassType?>>()
+private val methodByteCodeCache = WeakHashMap<ClassType, ByteArray?>()
 
 private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteArray? {
 
     val virtualMachine = virtualMachine()
+    val classTypeCacheValue = classTypeCache.getOrPut(virtualMachine) { mutableMapOf() }
 
     // java.lang.Class
     val classType = virtualMachine.classesByName("java.lang.Class")?.let {
         if (it.size != 0) it[0] as? ClassType else null
     } ?: return null
 
-    fun getClassForName(className: String): ClassType? {
+    fun getClassForName(className: String): ClassType? = classTypeCacheValue.getOrPut(className) {
         val forNameMethod = classType.concreteMethodByName("forName", "(Ljava/lang/String;)Ljava/lang/Class;")
         val loadedClass = classType.invokeMethod(this, forNameMethod, listOf(virtualMachine.mirrorOf(className)), 0) as ClassObjectReference
-        return loadedClass.reflectedType() as? ClassType
+        loadedClass.reflectedType() as? ClassType
     }
+
 
     // java.lang.reflect.Array
     val arrayType = getClassForName("java.lang.reflect.Array") ?: return null

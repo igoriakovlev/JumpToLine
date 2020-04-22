@@ -5,6 +5,10 @@
 
 package org.jetbrains.plugins.setIp.injectionUtils
 
+import com.intellij.debugger.DebuggerManagerEx
+import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.ui.breakpoints.Breakpoint
+import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
 import org.jetbrains.org.objectweb.asm.*
 import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
 import org.jetbrains.org.objectweb.asm.util.CheckClassAdapter
@@ -32,6 +36,29 @@ internal fun MethodName.matches(name: String?, desc: String?, signature: String?
         if (this.genericSignature == signature) return true
     }
     return false
+}
+
+internal fun DebugProcessImpl.suspendBreakpoints(): List<Pair<Breakpoint<*>, Boolean>> {
+
+    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+
+    val bpState = breakpointManager.breakpoints.map {
+        val wasEnabled = it.isEnabled
+        it.isEnabled = false
+        it to wasEnabled
+    }
+
+    breakpointManager.disableBreakpoints(this)
+    StackCapturingLineBreakpoint.deleteAll(this)
+
+    return bpState
+}
+
+internal fun DebugProcessImpl.resumeBreakpoints(bpStates: List<Pair<Breakpoint<*>, Boolean>>) {
+    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
+    breakpointManager.enableBreakpoints(this)
+    StackCapturingLineBreakpoint.createAll(this)
+    bpStates.forEach { it.first.isEnabled = it.second }
 }
 
 internal fun getAvailableGotoLines(

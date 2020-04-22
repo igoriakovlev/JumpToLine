@@ -1,28 +1,16 @@
 package org.jetbrains.plugins.setIp
 
-import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
-import com.intellij.openapi.project.Project
-import com.sun.jdi.*
+import com.sun.jdi.ClassType
+import com.sun.jdi.StackFrame
+import com.sun.jdi.ThreadReference
+import com.sun.jdi.Value
 import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
-
-private fun DebugProcessImpl.suspendBreakpoints() {
-    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-    breakpointManager.disableBreakpoints(this)
-    StackCapturingLineBreakpoint.deleteAll(this)
-}
-
-private fun DebugProcessImpl.resumeBreakpoints() {
-    val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-    breakpointManager.enableBreakpoints(this)
-    StackCapturingLineBreakpoint.createAll(this)
-}
 
 /**
  * JRE Stepping bug patch after class redefinition
@@ -70,7 +58,7 @@ internal fun debuggerJump(
                     .map { it.name() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
-    process.suspendBreakpoints()
+    val pbStates = process.suspendBreakpoints()
 
     val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
@@ -117,7 +105,7 @@ internal fun debuggerJump(
                     stackTargetFrame.trySetValue(it.first, it.second)
                 }
             }
-            process.resumeBreakpoints()
+            process.resumeBreakpoints(pbStates)
         }
     }
 
