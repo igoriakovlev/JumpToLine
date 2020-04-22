@@ -19,28 +19,24 @@ import com.sun.jdi.Location
 import com.sun.jdi.Method
 import org.jetbrains.plugins.setIp.injectionUtils.*
 
-private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T): T {
+private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
     var result: T? = null
-    var exception: Exception? = null
     session.process.invokeInManagerThread {
         try {
             result = body()
-        }catch(e : Exception) {
-            exception = e
+        }
+        catch(e : Exception) {
+            e.logException();
         }
     }
-
-    return exception?.let {
-        it.logException()
-        throw it
-    } ?: result!!
+    return result
 }
+
 
 internal val Method.methodName get() = MethodName(name(), signature(), genericSignature())
 
-internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl) = runInDebuggerThread(session) {
-    checkCanJumpImpl(session, xsession)
-}
+internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl) =
+        runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR
 
 private const val NOT_SUSPENDED = "Debugger session is not suspended"
 private const val SOME_ERROR = "Not available in current for some reason :("
@@ -49,6 +45,7 @@ private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top f
 private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
 private const val AVAILABLE = "Grab to change execution position"
 private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"
+private const val UNKNOWN_ERROR = "Cant jump for unknown reason"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
@@ -62,6 +59,9 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
     if (!process.virtualMachineProxy.isSuspended) return false to NOT_SUSPENDED
 
     val context = process.debuggerContext
+
+    if (context.suspendContext?.suspendPolicy != 2) return false to NOT_ALL_THREADS_ARE_SUSPENDED
+
     val threadProxy = context.threadProxy ?: return false to SOME_ERROR
 
     if (!threadProxy.isSuspended) return false to NOT_SUSPENDED
@@ -99,11 +99,8 @@ internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, 
 internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
-internal fun tryGetLinesToJump(
-        session: DebuggerSession
-): GetLinesToJumpResult = runInDebuggerThread(session) {
-    tryGetLinesToJumpImpl(session) ?: UnknownErrorResult
-}
+internal fun tryGetLinesToJump(session: DebuggerSession) =
+        runInDebuggerThread(session) { tryGetLinesToJumpImpl(session) } ?: UnknownErrorResult
 
 private class StrataViaLocationTranslator(
         currentLocation: Location,
@@ -128,6 +125,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
 
     val context = process.debuggerContext
+
     val threadProxy = context.threadProxy ?: return nullWithLog("Cannot get threadProxy")
     if (threadProxy.frameCount() < 2) return nullWithLog("frameCount < 2")
 
@@ -142,8 +140,8 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
         if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
     }
 
-    val isCtorOrRecursive = method.isConstructor || checkIsTopMethodRecursive(location, threadProxy)
-    if (isCtorOrRecursive) {
+    val onlyJumpByFrameDrop = method.isConstructor || checkIsTopMethodRecursive(location, threadProxy)
+    if (onlyJumpByFrameDrop) {
         val javaLine = method.allLineLocations()
                 .map { it.lineNumber("Java") }
                 .min()
@@ -217,7 +215,7 @@ private fun tryJumpToSelectedLineImpl(
 
     val location = frame.location()
 
-    if (location.lineNumber("Java") == targetLineInfo.javaLine) return unitWithLog("Current line selected")
+    if (location.lineNumber("Java") == targetLineInfo.javaLine) return
 
     val classType = location.declaringType() as? ClassType ?: return unitWithLog("Invalid location type")
 

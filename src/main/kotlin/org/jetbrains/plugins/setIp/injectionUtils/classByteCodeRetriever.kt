@@ -1,7 +1,6 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.intellij.debugger.engine.DebugProcessImpl
-import com.intellij.debugger.ui.breakpoints.Breakpoint
 import com.sun.jdi.*
 import java.util.*
 
