@@ -1,8 +1,8 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import org.jetbrains.org.objectweb.asm.ClassReader
-import org.jetbrains.org.objectweb.asm.Label
-import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Label
+import org.objectweb.asm.commons.AnalyzerAdapter
 import org.jetbrains.plugins.setIp.LineTranslator
 
 internal class StackEmptyLocatorAnalyzer private constructor(private val lineTranslator: LineTranslator?) : SingleMethodAnalyzer() {

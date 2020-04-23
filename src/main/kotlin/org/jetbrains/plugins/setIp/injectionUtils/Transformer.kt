@@ -1,6 +1,6 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import org.jetbrains.org.objectweb.asm.*
+import org.objectweb.asm.*
 
 internal const val firstStopCodeIndex = 5L
 internal const val jumpSwitchVariableName = "\$SETIP\$"

@@ -9,14 +9,11 @@ import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.ui.breakpoints.Breakpoint
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
-import org.jetbrains.org.objectweb.asm.*
-import org.jetbrains.org.objectweb.asm.ClassReader.SKIP_FRAMES
-import org.jetbrains.org.objectweb.asm.util.CheckClassAdapter
 import org.jetbrains.plugins.setIp.CommonTypeResolver
 import org.jetbrains.plugins.setIp.LineTranslator
 import org.jetbrains.plugins.setIp.TypeResolveError
-import java.io.PrintWriter
-import java.io.StringWriter
+import org.objectweb.asm.*
+import org.objectweb.asm.ClassReader.SKIP_FRAMES
 
 
 internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)

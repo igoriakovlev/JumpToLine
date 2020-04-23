@@ -1,7 +1,7 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import org.jetbrains.org.objectweb.asm.MethodVisitor
-import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.commons.AnalyzerAdapter
 
 internal abstract class SingleMethodAnalyzer : MethodVisitor6() {
     abstract var analyzerAdapter: AnalyzerAdapter?

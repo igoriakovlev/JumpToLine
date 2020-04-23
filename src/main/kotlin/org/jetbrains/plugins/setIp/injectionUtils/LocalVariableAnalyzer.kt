@@ -1,7 +1,7 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import org.jetbrains.org.objectweb.asm.commons.AnalyzerAdapter
-import org.jetbrains.org.objectweb.asm.*
+import org.objectweb.asm.commons.AnalyzerAdapter
+import org.objectweb.asm.*
 import org.jetbrains.plugins.setIp.LineTranslator
 
 internal typealias LocalsList = List<Pair<Type, Int>>
