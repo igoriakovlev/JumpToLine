@@ -28,7 +28,7 @@ intellij {
 }
 
 patchPluginXml {
-  untilBuild = '201.*'
+  untilBuild = '193.*' // '202.*'
 }
 
 sourceCompatibility = 1.8

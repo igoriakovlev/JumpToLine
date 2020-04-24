@@ -8,7 +8,7 @@
   <idea-version since-build="193"/>
 
   <!--
-  <depends>com.intellij.modules.lang</depends>
+  <depends>com.intellij.modules.java</depends>
   <idea-version since-build="201"/>
   -->
 
