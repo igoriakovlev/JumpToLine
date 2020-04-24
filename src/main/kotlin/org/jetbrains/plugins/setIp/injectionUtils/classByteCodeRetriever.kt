@@ -26,12 +26,12 @@ internal fun DebugProcessImpl.tryGetTypeByteCode(
         threadReference: ThreadReference,
         targetType: ClassType
 ): ByteArray? = methodByteCodeCache.getOrPut(targetType) {
-    val bpStates = suspendBreakpoints()
+    suspendBreakpoints()
     try {
         threadReference.tryGetTypeByteCodeImpl(targetType)
     } catch (e: Exception) { null }
     finally {
-        resumeBreakpoints(bpStates)
+        resumeBreakpoints()
     }
 }
 

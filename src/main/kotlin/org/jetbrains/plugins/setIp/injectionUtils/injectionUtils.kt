@@ -35,27 +35,16 @@ internal fun MethodName.matches(name: String?, desc: String?, signature: String?
     return false
 }
 
-internal fun DebugProcessImpl.suspendBreakpoints(): List<Pair<Breakpoint<*>, Boolean>> {
-
+internal fun DebugProcessImpl.suspendBreakpoints() {
     val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
-
-    val bpState = breakpointManager.breakpoints.map {
-        val wasEnabled = it.isEnabled
-        it.isEnabled = false
-        it to wasEnabled
-    }
-
     breakpointManager.disableBreakpoints(this)
     StackCapturingLineBreakpoint.deleteAll(this)
-
-    return bpState
 }
 
-internal fun DebugProcessImpl.resumeBreakpoints(bpStates: List<Pair<Breakpoint<*>, Boolean>>) {
+internal fun DebugProcessImpl.resumeBreakpoints() {
     val breakpointManager = DebuggerManagerEx.getInstanceEx(project).breakpointManager
     breakpointManager.enableBreakpoints(this)
     StackCapturingLineBreakpoint.createAll(this)
-    bpStates.forEach { it.first.isEnabled = it.second }
 }
 
 internal fun getAvailableGotoLines(

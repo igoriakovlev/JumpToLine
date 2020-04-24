@@ -58,7 +58,7 @@ internal fun debuggerJump(
                     .map { it.name() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
-    val pbStates = process.suspendBreakpoints()
+    process.suspendBreakpoints()
 
     val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
@@ -86,14 +86,19 @@ internal fun debuggerJump(
 
     InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false) {
 
+        fun resumeBreakpointsAndThrow(message: String): Nothing {
+            process.resumeBreakpoints()
+            throw IllegalStateException(message)
+        }
+
         fun ThreadReferenceProxyImpl.forceFramesAndGetFirst() = forceFrames()
                 .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
 
         val stackSwitchFrame = threadProxy.forceFramesAndGetFirst()
-                ?: throw IllegalStateException("Failed to get frame on stack")
+                ?: resumeBreakpointsAndThrow("Failed to get frame on stack")
 
         if (!stackSwitchFrame.trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
-            throw IllegalStateException("Failed to set SETIP variable")
+            resumeBreakpointsAndThrow("Failed to set SETIP variable")
         }
 
         InstrumentationMethodBreakpoint(process, threadProxy, targetLocation, stopAfterAction = true) {
@@ -105,12 +110,15 @@ internal fun debuggerJump(
                     stackTargetFrame.trySetValue(it.first, it.second)
                 }
             }
-            process.resumeBreakpoints(pbStates)
+            process.resumeBreakpoints()
         }
     }
 
-    val resumeThread = process.createResumeCommand(process.suspendManager.pausedContext)
-    resumeThread.run()
+    process.suspendBreakpoints()
+    process.suspendManager.resume(process.suspendManager.pausedContext)
+    // We should not resume it by command because Command will recreate user breakpoints that we have to avoid
+//    val resumeThread = process.createResumeCommand(process.suspendManager.pausedContext)
+//    resumeThread.run()
 }
 
 internal fun jumpByFrameDrop(
