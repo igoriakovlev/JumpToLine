@@ -12,7 +12,7 @@ internal class Transformer(
         private val methodLocalsCount: Int,
         private val argumentsCount: Int,
         visitor: ClassVisitor
-) : ClassVisitor(Opcodes.ASM6, visitor) {
+) : ClassVisitor(Opcodes.ASM7, visitor) {
 
     private var methodVisited = false
     private var methodVisitedTwice = false
@@ -21,7 +21,7 @@ internal class Transformer(
     val transformationSuccess get() =
         methodVisited && lineVisited && !methodVisitedTwice
 
-    private inner class MethodTransformer(private val targetLine: Int, visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM6, visitor) {
+    private inner class MethodTransformer(private val targetLine: Int, visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM7, visitor) {
 
         private val labelToMark = Label()
 

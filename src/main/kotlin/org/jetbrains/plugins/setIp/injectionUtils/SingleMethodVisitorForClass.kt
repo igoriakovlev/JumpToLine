@@ -3,7 +3,7 @@ package org.jetbrains.plugins.setIp.injectionUtils
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.commons.AnalyzerAdapter
 
-internal abstract class SingleMethodAnalyzer : MethodVisitor6() {
+internal abstract class SingleMethodAnalyzer : MethodVisitor7() {
     abstract var analyzerAdapter: AnalyzerAdapter?
 }
 
@@ -11,7 +11,7 @@ internal class SingleMethodVisitorForClass(
         private val methodName: MethodName,
         private val ownerTypeName: String,
         private val methodVisitor: SingleMethodAnalyzer)
-    : ClassVisitor6() {
+    : ClassVisitor7() {
 
     private var methodVisited = false
     private var methodVisitedTwice = false

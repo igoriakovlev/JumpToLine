@@ -7,7 +7,6 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
-import com.intellij.debugger.ui.breakpoints.Breakpoint
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
 import org.jetbrains.plugins.setIp.CommonTypeResolver
 import org.jetbrains.plugins.setIp.LineTranslator
@@ -16,9 +15,9 @@ import org.objectweb.asm.*
 import org.objectweb.asm.ClassReader.SKIP_FRAMES
 
 
-internal abstract class MethodVisitor6 : MethodVisitor(Opcodes.ASM6)
-internal abstract class ClassVisitor6 : ClassVisitor(Opcodes.ASM6)
-internal val EMPTY_METHOD_VISITOR = object : MethodVisitor6() {}
+internal abstract class MethodVisitor7 : MethodVisitor(Opcodes.ASM7)
+internal abstract class ClassVisitor7 : ClassVisitor(Opcodes.ASM7)
+internal val EMPTY_METHOD_VISITOR = object : MethodVisitor7() {}
 
 internal val String.dotSpacedName get() = replace('/', '.')
 internal val String.slashSpacedName get() = replace('.', '/')
