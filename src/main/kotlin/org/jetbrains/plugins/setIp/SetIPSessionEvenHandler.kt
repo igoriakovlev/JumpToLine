@@ -15,9 +15,10 @@ import org.jetbrains.plugins.setIp.SetIPExecutionLineGutterRenderer
 internal class SetIPSessionEvenHandler(
     private val session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
-    private val project: Project,
     private val commonTypeResolver: CommonTypeResolver
 ) : XDebugSessionListener {
+
+    private val project = session.project
 
     private val executionPointHighlighter = ExecutionPointHighlighter(project)
     override fun sessionPaused() {

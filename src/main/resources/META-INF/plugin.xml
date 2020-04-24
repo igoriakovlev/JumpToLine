@@ -14,9 +14,7 @@
 
   <description>Moves your execution point anywhere possible position</description>
 
-  <project-components>
-    <component>
-      <implementation-class>org.jetbrains.plugins.setIp.SetIPPluginProjectComponent</implementation-class>
-    </component>
-  </project-components>
+  <extensions defaultExtensionNs="com.intellij">
+    <postStartupActivity implementation="org.jetbrains.plugins.setIp.SetIPStartupActivity" />
+  </extensions>
 </idea-plugin>
