@@ -21,11 +21,22 @@ internal class SetIPExecutionLineGutterRenderer(
     commonTypeResolver: CommonTypeResolver
 ) : GutterIconRenderer(), GutterMark {
 
+    fun update() {
+        synchronized(session) {
+            canJump = checkCanJump(session, xsession)
+            gutter.reset()
+        }
+    }
+
     override fun hashCode(): Int = 0
 
+    companion object {
+        val jumpOkIcon = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
+        val jumpFailIcon = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
+    }
+
     override fun getIcon(): Icon =
-            if (canJump.first) IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
-            else IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
+        if (canJump.first) jumpOkIcon else jumpFailIcon
 
     override fun equals(other: Any?): Boolean = false
 
@@ -38,10 +49,8 @@ internal class SetIPExecutionLineGutterRenderer(
 
     override fun getTooltipText(): String? = canJump.second
 
-    private val gutter = SetIPArrowGutter(project, commonTypeResolver, session)
+    private val gutter = SetIPArrowGutter(project, commonTypeResolver, session )
 
-    private val canJump by lazy {
-        checkCanJump(session, xsession)
-    }
+    private var canJump: Pair<Boolean, String> = false to ""
 }
 

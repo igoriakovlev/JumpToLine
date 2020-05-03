@@ -6,11 +6,9 @@
 package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.impl.DebuggerSession
-import com.intellij.openapi.project.Project
 import com.intellij.xdebugger.XDebugSessionListener
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
-import org.jetbrains.plugins.setIp.SetIPExecutionLineGutterRenderer
 
 internal class SetIPSessionEvenHandler(
     private val session: DebuggerSession,
@@ -20,13 +18,16 @@ internal class SetIPSessionEvenHandler(
 
     private val project = session.project
 
+    private val renderer = SetIPExecutionLineGutterRenderer(session, xsession, project, commonTypeResolver)
     private val executionPointHighlighter = ExecutionPointHighlighter(project)
+
     override fun sessionPaused() {
+        renderer.update()
         val currentPosition = xsession.currentPosition ?: return
         executionPointHighlighter.show(
             currentPosition,
             xsession.isTopFrameSelected,
-            SetIPExecutionLineGutterRenderer(session, xsession, project, commonTypeResolver)
+            renderer
         )
         xsession.updateExecutionPosition()
     }

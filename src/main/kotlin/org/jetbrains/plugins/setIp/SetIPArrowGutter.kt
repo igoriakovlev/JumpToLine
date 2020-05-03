@@ -7,6 +7,7 @@ import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.vfs.VirtualFile
 import java.awt.Cursor
 import java.awt.dnd.DragSource
+import javax.swing.Icon
 
 internal class SetIPArrowGutter(
         private val project: Project,
@@ -53,7 +54,17 @@ internal class SetIPArrowGutter(
     private fun localAnalysisByRenderLine(line: Int) =
             currentJumpInfo?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
 
-    private val currentJumpInfo: JumpLinesInfo? by lazy {
-        tryGetLinesToJump(session) as? JumpLinesInfo
+    fun reset() {
+        currentJumpInfoCached = null
+    }
+
+    private var currentJumpInfoCached: GetLinesToJumpResult? = null
+
+    private val currentJumpInfo: JumpLinesInfo? get() {
+        synchronized(session) {
+            if (currentJumpInfoCached != null) return currentJumpInfoCached as? JumpLinesInfo
+            currentJumpInfoCached = tryGetLinesToJump(session)
+            return currentJumpInfoCached as? JumpLinesInfo
+        }
     }
 }

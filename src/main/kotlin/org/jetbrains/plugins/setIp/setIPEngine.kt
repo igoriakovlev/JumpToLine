@@ -36,39 +36,46 @@ private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T
 internal val Method.methodName get() = MethodName(name(), signature(), genericSignature())
 
 internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl) =
-        runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR
+        runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR0
 
 private const val NOT_SUSPENDED = "Debugger session is not suspended"
-private const val SOME_ERROR = "Not available in current for some reason :("
 private const val MAIN_FUNCTION_CALL = "SetIP is not available for main function call"
 private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top frames"
 private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
 private const val AVAILABLE = "Grab to change execution position"
 private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"
-private const val UNKNOWN_ERROR = "Cant jump for unknown reason"
+private const val UNKNOWN_ERROR0 = "Cant jump for unknown reason (#0)"
+private const val UNKNOWN_ERROR1 = "Cant jump for unknown reason (#1)"
+private const val UNKNOWN_ERROR2 = "Cant jump for unknown reason (#2)"
+private const val UNKNOWN_ERROR3 = "Cant jump for unknown reason (#3)"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
 private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionImpl): Pair<Boolean, String> {
     val process = session.process
 
-    if (!xsession.isSuspended) return false to NOT_SUSPENDED
+    if (!xsession.isSuspended)
+        return false to NOT_SUSPENDED
 
     if (!xsession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
 
-    if (!process.virtualMachineProxy.isSuspended) return false to NOT_SUSPENDED
+    if (!session.process.isEvaluationPossible) return false to UNKNOWN_ERROR1
+
+    if (!process.virtualMachineProxy.isSuspended)
+        return false to NOT_SUSPENDED
 
     val context = process.debuggerContext
 
     if (context.suspendContext?.suspendPolicy != 2) return false to NOT_ALL_THREADS_ARE_SUSPENDED
 
-    val threadProxy = context.threadProxy ?: return false to SOME_ERROR
+    val threadProxy = context.threadProxy ?: return false to UNKNOWN_ERROR2
 
-    if (!threadProxy.isSuspended) return false to NOT_SUSPENDED
+    if (!threadProxy.isSuspended)
+        return false to NOT_SUSPENDED
 
     if (threadProxy.frameCount() < 2) return false to MAIN_FUNCTION_CALL
 
-    val method = threadProxy.frame(0)?.location()?.method() ?: return false to SOME_ERROR
+    val method = threadProxy.frame(0)?.location()?.method() ?: return false to UNKNOWN_ERROR3
 
     if (method.signature().matches(coroutineRegex)) return false to COROUTINE_SUSPECTED
 
@@ -123,6 +130,8 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
     val process = session.process
 
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
+
+    if (!process.isEvaluationPossible) return nullWithLog("Evaluation is not possible")
 
     val context = process.debuggerContext
 
