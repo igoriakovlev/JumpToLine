@@ -4,10 +4,7 @@ import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.sun.jdi.ClassType
-import com.sun.jdi.StackFrame
-import com.sun.jdi.ThreadReference
-import com.sun.jdi.Value
+import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
@@ -52,10 +49,15 @@ internal fun debuggerJump(
 
     val machine = threadProxy.virtualMachineProxy
 
-    val localVariables =
-            currentFrame().visibleVariables()
-                    .filterNot { arguments.contains(it.variable) }
-                    .map { it.name() to currentFrame().getValue(it) }
+    data class VariableDescription(val name: String, val signature: String?, val genericSignature: String?) {
+        fun isTheSameWith(variable: LocalVariable) =
+                variable.name() == name && variable.signature() == signature && variable.genericSignature() == genericSignature
+    }
+    fun LocalVariable.toDescription() = VariableDescription(name(), signature(), genericSignature())
+
+    val localVariables = currentFrame().visibleVariables()
+                    .filterNot { it.variable.isArgument }
+                    .map { it.variable.toDescription() to currentFrame().getValue(it) }
                     .filter { it.second !== null }
 
     process.suspendBreakpoints()
@@ -78,11 +80,12 @@ internal fun debuggerJump(
             .minBy { it.codeIndex() }
             ?: return unitWithLog("Cannot find target location")
 
-    fun StackFrame.trySetValue(name: String, value: Value) =
-            visibleVariableByName(name)?.let {
-                setValue(it, value)
-                true
-            } ?: false
+    fun StackFrame.trySetValue(description: VariableDescription, value: Value) {
+        val variable = visibleVariableByName(description.name) ?: return
+        if (!description.isTheSameWith(variable)) return
+        setValue(variable, value)
+        return
+    }
 
     InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false) {
 
@@ -97,9 +100,9 @@ internal fun debuggerJump(
         val stackSwitchFrame = threadProxy.forceFramesAndGetFirst()
                 ?: resumeBreakpointsAndThrow("Failed to get frame on stack")
 
-        if (!stackSwitchFrame.trySetValue(jumpSwitchVariableName, machine.mirrorOf(1))) {
-            resumeBreakpointsAndThrow("Failed to set SETIP variable")
-        }
+        val jumpVariable = stackSwitchFrame.visibleVariableByName(jumpSwitchVariableName)
+        stackSwitchFrame.setValue(jumpVariable, machine.mirrorOf(1))
+        //resumeBreakpointsAndThrow("Failed to set SETIP variable")
 
         InstrumentationMethodBreakpoint(process, threadProxy, targetLocation, stopAfterAction = true) {
 
