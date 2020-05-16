@@ -73,8 +73,10 @@ internal class SetIPArrowGutter(
         private val DefaultCursor = Cursor(Cursor.DEFAULT_CURSOR)
         private val smartStepInto =
                 EditorColorsManager.getInstance().globalScheme.getAttributes(DebuggerColors.SMART_STEP_INTO_TARGET)
-        private val greenAttribute = smartStepInto.clone().also { it.backgroundColor = Color(227,244, 189) }
-        private val yellowAttribute = smartStepInto.clone().also { it.backgroundColor = Color(255,236, 154) }
+        private val greenColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(30,40, 0) else Color(227,244, 189)
+        private val yellowColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(50,40, 0) else Color(227,244, 189)
+        private val safeLineAttribute = smartStepInto.clone().also { it.backgroundColor = greenColor }
+        private val unsageLineAttribute = smartStepInto.clone().also { it.backgroundColor = yellowColor }
     }
 
     private fun resetHighlighters() {
@@ -93,7 +95,7 @@ internal class SetIPArrowGutter(
             highlighters = currentJumpInfo?.linesToJump?.mapNotNull { line ->
                 val lineToSet = line.sourceLine - 1
                 if (lineToSet <= lineCount && lineToSet != currentLine) {
-                    val attributes = if (line.isSafeLine) greenAttribute else yellowAttribute
+                    val attributes = if (line.isSafeLine) safeLineAttribute else unsageLineAttribute
                     markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
                 } else null
             }
