@@ -43,7 +43,7 @@ internal class SetIPExecutionLineGutterRenderer(
     override fun getAlignment(): Alignment = Alignment.LEFT
 
     override fun getDraggableObject(): GutterDraggableObject?
-        = if (canJump.first) gutter else null
+        = if (canJump.first && xsession.currentPosition != null) gutter else null
 
     override fun isNavigateAction(): Boolean = canJump.first
 

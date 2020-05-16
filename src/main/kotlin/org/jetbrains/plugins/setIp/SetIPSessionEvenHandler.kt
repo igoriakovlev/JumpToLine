@@ -11,9 +11,9 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
 
 internal class SetIPSessionEvenHandler(
-    private val session: DebuggerSession,
+    session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
-    private val commonTypeResolver: CommonTypeResolver
+    commonTypeResolver: CommonTypeResolver
 ) : XDebugSessionListener {
 
     private val project = session.project
@@ -23,6 +23,7 @@ internal class SetIPSessionEvenHandler(
 
     override fun sessionPaused() {
         renderer.update()
+
         val currentPosition = xsession.currentPosition ?: return
         executionPointHighlighter.show(
             currentPosition,
