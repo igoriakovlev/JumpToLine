@@ -162,9 +162,12 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
                 javaLine = javaLine,
                 sourceLine = translatedLine,
                 locals = emptyList(),
+                fistLocalsFrame = emptyList(),
                 isSafeLine = true,
                 isFirstLine = true,
-                methodLocalsCount = 0
+                methodLocalsCount = 0,
+                instantFrame = true,
+                localsFrame = emptyList()
         )
         return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null)
     }

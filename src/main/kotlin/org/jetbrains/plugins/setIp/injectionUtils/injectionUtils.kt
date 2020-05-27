@@ -12,10 +12,11 @@ import org.jetbrains.plugins.setIp.CommonTypeResolver
 import org.jetbrains.plugins.setIp.LineTranslator
 import org.jetbrains.plugins.setIp.TypeResolveError
 import org.objectweb.asm.*
+import org.objectweb.asm.ClassReader.EXPAND_FRAMES
 import org.objectweb.asm.ClassReader.SKIP_FRAMES
 
 
-internal abstract class MethodVisitor7 : MethodVisitor(Opcodes.ASM7)
+internal abstract class MethodVisitor7(visitor: MethodVisitor? = null) : MethodVisitor(Opcodes.ASM7, visitor)
 internal abstract class ClassVisitor7 : ClassVisitor(Opcodes.ASM7)
 internal val EMPTY_METHOD_VISITOR = object : MethodVisitor7() {}
 
@@ -97,7 +98,7 @@ internal fun updateClassWithGotoLinePrefix(
     val writer = ClassWriterWithTypeResolver(
             commonTypeResolver = commonTypeResolver,
             classReader = classReaderToWrite,
-            flags = ClassWriter.COMPUTE_FRAMES or ClassWriter.COMPUTE_MAXS
+            flags = ClassWriter.COMPUTE_MAXS
     )
 
 //    val stringWriter = StringWriter()
@@ -105,16 +106,14 @@ internal fun updateClassWithGotoLinePrefix(
 //    CheckClassAdapter()
 
     val transformer = Transformer(
+            targetLineInfo = targetLineInfo,
             methodName = targetMethod,
-            line = targetLineInfo.javaLine,
-            locals = targetLineInfo.locals,
-            methodLocalsCount = targetLineInfo.methodLocalsCount,
             argumentsCount = argumentsCount,
             visitor = writer
     )
 
     try {
-        classReaderToWrite.accept(transformer, SKIP_FRAMES)
+        classReaderToWrite.accept(transformer, EXPAND_FRAMES)
 //        val errors = printWriter.toString()
 //        if (errors.isNotBlank()) return nullWithLog(errors)
     } catch(e: TypeResolveError) {

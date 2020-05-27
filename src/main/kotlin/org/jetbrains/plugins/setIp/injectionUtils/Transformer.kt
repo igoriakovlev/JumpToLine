@@ -6,10 +6,8 @@ internal const val firstStopCodeIndex = 5L
 internal const val jumpSwitchVariableName = "\$SETIP\$"
 
 internal class Transformer(
+        private val targetLineInfo: LocalVariableAnalyzeResult,
         private val methodName: MethodName,
-        private val line: Int,
-        private val locals: List<Pair<Type, Int>>,
-        private val methodLocalsCount: Int,
         private val argumentsCount: Int,
         visitor: ClassVisitor
 ) : ClassVisitor(Opcodes.ASM7, visitor) {
@@ -21,7 +19,7 @@ internal class Transformer(
     val transformationSuccess get() =
         methodVisited && lineVisited && !methodVisitedTwice
 
-    private inner class MethodTransformer(private val targetLine: Int, visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM7, visitor) {
+    private inner class MethodTransformer(visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM7, visitor) {
 
         private val labelToMark = Label()
 
@@ -53,9 +51,8 @@ internal class Transformer(
                 else -> Opcodes.ASTORE
             }
 
-
         private fun emitNullifyLocals() {
-            for ((type, index) in locals) {
+            for ((type, index) in targetLineInfo.locals) {
                 if (index < argumentsCount) continue
 
                 if (type.defaultValue === null) {
@@ -68,9 +65,13 @@ internal class Transformer(
             }
         }
 
+        private fun LocalsFrame.withSlashSpacedNames() = map {
+            if (it is String) it.slashSpacedName else it
+        }
+
         override fun visitCode() {
 
-            val extraVariable = methodLocalsCount
+            val extraVariable = targetLineInfo.methodLocalsCount
 
             val labelOnStart = Label()
             val labelOnFinish = Label()
@@ -89,14 +90,13 @@ internal class Transformer(
             super.visitInsn(Opcodes.NOP)
             super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
 
-            super.visitLdcInsn(0)
-            super.visitVarInsn(Opcodes.ISTORE, extraVariable)
-
             super.visitJumpInsn(Opcodes.IFEQ, labelOnFinish)
 
             emitNullifyLocals()
 
             super.visitJumpInsn(Opcodes.GOTO, labelToMark)
+            val localsFrame = targetLineInfo.fistLocalsFrame.withSlashSpacedNames().toTypedArray()
+            super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
 
             super.visitLabel(labelOnFinish)
 
@@ -105,11 +105,22 @@ internal class Transformer(
             super.visitCode()
         }
 
+        override fun visitFrame(type: Int, numLocal: Int, local: Array<out Any>?, numStack: Int, stack: Array<out Any>?) {
+            super.visitFrame(Opcodes.F_NEW, numLocal, local, numStack, stack)
+        }
+
         override fun visitLineNumber(line: Int, start: Label?) {
-            if (targetLine == line) {
+            if (targetLineInfo.javaLine == line) {
                 if (!lineVisited) {
                     lineVisited = true
                     super.visitLabel(labelToMark)
+                    if (!targetLineInfo.instantFrame) {
+                        val localsFrame = targetLineInfo
+                                .localsFrame
+                                .withSlashSpacedNames()
+                                .toTypedArray()
+                        super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
+                    }
                 }
             }
             super.visitLineNumber(line, start)
@@ -123,10 +134,7 @@ internal class Transformer(
                 super.visitMethod(access, name, desc, signature, exceptions)
             } else {
                 methodVisited = true
-                MethodTransformer(
-                        line,
-                        super.visitMethod(access, name, desc, signature, exceptions)
-                )
+                MethodTransformer(super.visitMethod(access, name, desc, signature, exceptions))
             }
         } else {
             super.visitMethod(access, name, desc, signature, exceptions)
