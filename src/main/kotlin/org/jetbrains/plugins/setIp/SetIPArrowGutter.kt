@@ -73,8 +73,8 @@ internal class SetIPArrowGutter(
         private val DefaultCursor = Cursor(Cursor.DEFAULT_CURSOR)
         private val smartStepInto =
                 EditorColorsManager.getInstance().globalScheme.getAttributes(DebuggerColors.SMART_STEP_INTO_TARGET)
-        private val greenColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(30,40, 0) else Color(227,244, 189)
-        private val yellowColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(50,40, 0) else Color(227,244, 189)
+        private val greenColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(30,40, 0) else Color(199,225, 94)
+        private val yellowColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(50,40, 0) else Color(248,253, 185)
         private val safeLineAttribute = smartStepInto.clone().also { it.backgroundColor = greenColor }
         private val unsageLineAttribute = smartStepInto.clone().also { it.backgroundColor = yellowColor }
     }

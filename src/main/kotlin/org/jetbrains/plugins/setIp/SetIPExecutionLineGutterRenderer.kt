@@ -31,8 +31,8 @@ internal class SetIPExecutionLineGutterRenderer(
     override fun hashCode(): Int = 0
 
     companion object {
-        val jumpOkIcon = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg")
-        val jumpFailIcon = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg")
+        val jumpOkIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg", this.javaClass)
+        val jumpFailIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg", this.javaClass)
     }
 
     override fun getIcon(): Icon =
