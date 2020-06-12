@@ -3,8 +3,14 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.ex.EditorGutterComponentEx
 import com.intellij.openapi.editor.impl.DocumentMarkupModel
-import com.intellij.openapi.editor.markup.*
+import com.intellij.openapi.editor.markup.GutterDraggableObject
+import com.intellij.openapi.editor.markup.MarkupModel
+import com.intellij.openapi.editor.markup.RangeHighlighter
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.vfs.VirtualFile
@@ -12,8 +18,9 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
-import java.awt.Color
-import java.awt.Cursor
+import java.awt.*
+import java.awt.event.MouseEvent
+import java.awt.event.MouseListener
 
 internal class SetIPArrowGutter(
         private val project: Project,
@@ -80,10 +87,15 @@ internal class SetIPArrowGutter(
     }
 
     private fun resetHighlighters() {
-        highlighters?.forEach {
+
+        remove()
+
+        val currentHighlighters = highlighters ?: return
+        highlighters = null
+
+        currentHighlighters.forEach {
             markupModel?.removeHighlighter(it)
         }
-        highlighters = null
     }
 
     private fun updateHighlighters() {
@@ -99,6 +111,46 @@ internal class SetIPArrowGutter(
                     markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
                 } else null
             }
+            reSetterByMouseLeave.install()
+        }
+    }
+
+    private inline fun <reified T> Any?.castSafelyTo(): T? = this as? T
+
+    private val reSetterByMouseLeave = object : MouseListener {
+
+        private var installedGutterComponent: EditorGutterComponentEx? = null
+
+        fun install() {
+
+            val editor = session.xDebugSession
+                    ?.currentPosition
+                    ?.file
+                    ?.let { FileEditorManager.getInstance(project).getSelectedEditor(it) }
+
+            installedGutterComponent =
+                    editor.castSafelyTo<TextEditor>()
+                            ?.editor.castSafelyTo<EditorEx>()
+                            ?.gutterComponentEx
+
+            installedGutterComponent?.addMouseListener(this)
+        }
+
+        fun remove() {
+            installedGutterComponent = null
+            installedGutterComponent?.removeMouseListener(this)
+        }
+
+        override fun mouseReleased(e: MouseEvent?) {}
+
+        override fun mouseEntered(e: MouseEvent?) {}
+
+        override fun mouseClicked(e: MouseEvent?) {}
+
+        override fun mousePressed(e: MouseEvent?) {}
+
+        override fun mouseExited(e: MouseEvent?) {
+            resetHighlighters()
         }
     }
 
@@ -116,6 +168,7 @@ internal class SetIPArrowGutter(
         currentJumpInfoCached = null
         markupModelCached = null
         documentCached = null
+        reSetterByMouseLeave.remove()
     }
 
     private var currentJumpInfoCached: GetLinesToJumpResult? = null
