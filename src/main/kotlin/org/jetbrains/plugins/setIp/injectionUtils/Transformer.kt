@@ -95,8 +95,10 @@ internal class Transformer(
             emitNullifyLocals()
 
             super.visitJumpInsn(Opcodes.GOTO, labelToMark)
-            val localsFrame = targetLineInfo.fistLocalsFrame.withSlashSpacedNames().toTypedArray()
-            super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
+            if (!targetLineInfo.frameOnFirstInstruction) {
+                val localsFrame = targetLineInfo.fistLocalsFrame.withSlashSpacedNames().toTypedArray()
+                super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
+            }
 
             super.visitLabel(labelOnFinish)
 

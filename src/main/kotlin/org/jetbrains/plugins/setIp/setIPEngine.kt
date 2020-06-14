@@ -167,6 +167,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
                 isFirstLine = true,
                 methodLocalsCount = 0,
                 instantFrame = true,
+                frameOnFirstInstruction = false,
                 localsFrame = emptyList()
         )
         return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null)

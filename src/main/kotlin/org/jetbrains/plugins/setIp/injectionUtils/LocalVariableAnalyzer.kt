@@ -16,7 +16,8 @@ internal data class LocalVariableAnalyzeResult(
         val isSafeLine: Boolean,
         val isFirstLine: Boolean,
         val methodLocalsCount: Int,
-        val instantFrame: Boolean
+        val instantFrame: Boolean,
+        val frameOnFirstInstruction: Boolean
 )
 
 internal class LocalVariableAnalyzer private constructor(
@@ -97,7 +98,8 @@ internal class LocalVariableAnalyzer private constructor(
                     isSafeLine = isSafe,
                     isFirstLine = it.value.isFirstLine,
                     methodLocalsCount = methodLocalsCount,
-                    instantFrame = isInstantFrame
+                    instantFrame = isInstantFrame,
+                    frameOnFirstInstruction = instructionCountOnFrames.contains(0)
             )
         }
     }
