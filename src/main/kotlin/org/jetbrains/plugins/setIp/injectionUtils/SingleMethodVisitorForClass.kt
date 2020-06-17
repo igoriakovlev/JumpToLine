@@ -3,7 +3,7 @@ package org.jetbrains.plugins.setIp.injectionUtils
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.commons.AnalyzerAdapter
 
-internal abstract class SingleMethodAnalyzer(visitor: MethodVisitor? = null) : MethodVisitor7(visitor) {
+internal abstract class SingleMethodAnalyzer(visitor: MethodVisitor? = null) : MethodVisitorWithCounter(visitor) {
     abstract var analyzerAdapter: AnalyzerAdapter?
 }
 

@@ -17,7 +17,7 @@ import org.objectweb.asm.ClassReader.SKIP_FRAMES
 
 
 internal abstract class MethodVisitor7(visitor: MethodVisitor? = null) : MethodVisitor(Opcodes.ASM7, visitor)
-internal abstract class ClassVisitor7 : ClassVisitor(Opcodes.ASM7)
+internal abstract class ClassVisitor7(visitor: ClassVisitor? = null) : ClassVisitor(Opcodes.ASM7, visitor)
 internal val EMPTY_METHOD_VISITOR = object : MethodVisitor7() {}
 
 internal val String.dotSpacedName get() = replace('/', '.')

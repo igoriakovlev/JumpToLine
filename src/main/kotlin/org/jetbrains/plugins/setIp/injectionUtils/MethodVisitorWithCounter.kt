@@ -4,7 +4,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 
-internal abstract class SingleMethodAnalyzerWithCounter(visitor: MethodVisitor? = null) : SingleMethodAnalyzer(visitor) {
+internal abstract class MethodVisitorWithCounter(visitor: MethodVisitor? = null) : MethodVisitor7(visitor) {
 
     var instructionIndex: Long = 0
         private set

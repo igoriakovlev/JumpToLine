@@ -10,7 +10,7 @@ internal class Transformer(
         private val methodName: MethodName,
         private val argumentsCount: Int,
         visitor: ClassVisitor
-) : ClassVisitor(Opcodes.ASM7, visitor) {
+) : ClassVisitor7(visitor) {
 
     private var methodVisited = false
     private var methodVisitedTwice = false
@@ -19,7 +19,7 @@ internal class Transformer(
     val transformationSuccess get() =
         methodVisited && lineVisited && !methodVisitedTwice
 
-    private inner class MethodTransformer(visitor: MethodVisitor) : MethodVisitor(Opcodes.ASM7, visitor) {
+    private inner class MethodTransformer(visitor: MethodVisitor) : MethodVisitorWithCounter(visitor) {
 
         private val labelToMark = Label()
 
@@ -69,6 +69,10 @@ internal class Transformer(
             if (it is String) it.slashSpacedName else it
         }
 
+        val labelOnZeroIndex = Label()
+        var codeStartIndex: Long = 0L
+        val codeLabelsOnCodeStart: MutableSet<Label> = mutableSetOf()
+
         override fun visitCode() {
 
             val extraVariable = targetLineInfo.methodLocalsCount
@@ -76,6 +80,7 @@ internal class Transformer(
             val labelOnStart = Label()
             val labelOnFinish = Label()
 
+            super.visitLabel(labelOnZeroIndex)
 
             super.visitLdcInsn(0)
             super.visitVarInsn(Opcodes.ISTORE, extraVariable)
@@ -104,7 +109,20 @@ internal class Transformer(
 
             super.visitLocalVariable(jumpSwitchVariableName, "I", null, labelOnStart, labelOnFinish, extraVariable)
 
+            codeStartIndex = instructionIndex
             super.visitCode()
+        }
+
+        override fun visitLabel(label: Label) {
+            super.visitLabel(label)
+            if (codeStartIndex == instructionIndex) {
+                codeLabelsOnCodeStart.add(label)
+            }
+        }
+
+        override fun visitLocalVariable(name: String?, descriptor: String?, signature: String?, start: Label?, end: Label?, index: Int) {
+            val shiftedStart = if (codeLabelsOnCodeStart.contains(start)) labelOnZeroIndex else start
+            super.visitLocalVariable(name, descriptor, signature, shiftedStart, end, index)
         }
 
         override fun visitFrame(type: Int, numLocal: Int, local: Array<out Any>?, numStack: Int, stack: Array<out Any>?) {

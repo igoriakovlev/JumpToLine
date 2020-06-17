@@ -9,6 +9,7 @@ internal typealias LocalsFrame = List<Any>
 
 internal open class LocalSemiDescriptor(val index: Int, val asmType: Type)
 internal class LocalDescriptor(index: Int, asmType: Type, val canRestore: Boolean) : LocalSemiDescriptor(index, asmType)
+internal data class UserVisibleLocal(val name: String, val descriptor: String, val signature: String?, val start: Label, val end: Label, val index: Int)
 
 internal data class LocalVariableAnalyzeResult(
         val javaLine: Int,
@@ -28,7 +29,7 @@ internal class LocalVariableAnalyzer private constructor(
         private val lineTranslator: LineTranslator?,
         private val lineFilterSet: Set<Int>,
         private val jumpFromLine: Int
-) : SingleMethodAnalyzerWithCounter() {
+) : SingleMethodAnalyzer() {
 
     private data class SemiResult(
             val locals: List<LocalSemiDescriptor>,
@@ -48,7 +49,6 @@ internal class LocalVariableAnalyzer private constructor(
     private val duplicatedLines = mutableSetOf<Int>()
     private val firstLocalsFrame = mutableListOf<Any>()
 
-    private data class UserVisibleLocal(val start: Label, val end: Label)
     private val localVariablesWithRanges: MutableMap<Int, MutableList<UserVisibleLocal>> = mutableMapOf()
 
     private val localVariablesAccessRegions: MutableMap<Int, MutableList<Pair<Long, Long>>> = mutableMapOf()
@@ -181,9 +181,9 @@ internal class LocalVariableAnalyzer private constructor(
         super.visitVarInsn(opcode, `var`)
     }
 
-    override fun visitLocalVariable(name: String, descriptor: String?, signature: String?, start: Label, end: Label, index: Int) {
+    override fun visitLocalVariable(name: String, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
         super.visitLocalVariable(name, descriptor, signature, start, end, index)
-        localVariablesWithRanges.getOrCreate(index) { mutableListOf() }.add(UserVisibleLocal(start, end))
+        localVariablesWithRanges.getOrCreate(index) { mutableListOf() }.add(UserVisibleLocal(name, descriptor, signature, start, end, index))
     }
 
     override fun visitLabel(label: Label) {
