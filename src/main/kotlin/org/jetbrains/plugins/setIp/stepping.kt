@@ -3,6 +3,7 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
+import com.intellij.debugger.jdi.DecompiledLocalVariable
 import com.intellij.debugger.jdi.LocalVariablesUtil
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.sun.jdi.*
@@ -56,13 +57,12 @@ internal fun debuggerJump(
     }
     fun LocalVariable.toDescription() = VariableDescription(name(), signature(), genericSignature())
 
-    var localVariablesByIJ: List<Pair<Int, Value>>? = null
+    var localVariablesByIJ: Map<DecompiledLocalVariable, Value>? = null
     var localVariablesByJDI: List<Pair<VariableDescription, Value>>? = null
     if (LocalVariablesUtil.canSetValues()) {
         localVariablesByIJ = LocalVariablesUtil.fetchValues(currentFrame(), process, true)
             .filterNot { it.key.isParam }
-            .filter { targetLineInfo.locals.any { local -> local.canRestore && local.index == it.key.slot } }
-            .map { it.key.slot to it.value }
+            .filter { targetLineInfo.locals.any { local -> local.canRestore && local.index == it.key.slot() } }
     } else {
         localVariablesByJDI = currentFrame().visibleVariables()
                 .filterNot { it.variable.isArgument }
@@ -120,12 +120,10 @@ internal fun debuggerJump(
             if (stackTargetFrame != null) {
                 if (LocalVariablesUtil.canSetValues() && localVariablesByIJ != null) {
                     localVariablesByIJ.forEach {
-                        LocalVariablesUtil.setValue(stackTargetFrame, it.first, it.second)
+                        LocalVariablesUtil.setValue(stackTargetFrame, it.key, it.value)
                     }
-                } else if (localVariablesByJDI != null) {
-                    localVariablesByJDI.forEach {
-                        stackTargetFrame.trySetValue(it.first, it.second)
-                    }
+                } else localVariablesByJDI?.forEach {
+                    stackTargetFrame.trySetValue(it.first, it.second)
                 }
             }
 

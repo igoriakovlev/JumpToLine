@@ -23,12 +23,12 @@ dependencies {
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
   // Define IntelliJ Platform API version to use for building this plugin
-  version '2019.3' //'2020.1' - do not forget to change plugin.xml
+  version '2020.1'
   plugins 'java'
 }
 
 patchPluginXml {
-  untilBuild = '193.*' // '202.*'
+  untilBuild = '203.*'
 }
 
 sourceCompatibility = 1.8
