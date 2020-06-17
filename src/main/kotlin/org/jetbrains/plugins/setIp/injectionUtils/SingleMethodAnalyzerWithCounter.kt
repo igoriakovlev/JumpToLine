@@ -2,74 +2,75 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
+import org.objectweb.asm.MethodVisitor
 
-internal class InstructionCounteringVisitor : MethodVisitor7() {
+internal abstract class SingleMethodAnalyzerWithCounter(visitor: MethodVisitor? = null) : SingleMethodAnalyzer(visitor) {
 
-    var instructionVisited: Long = 0
+    var instructionIndex: Long = 0
         private set
 
     override fun visitInsn(opcode: Int) {
         super.visitInsn(opcode)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitFieldInsn(opcode: Int, owner: String?, name: String?, descriptor: String?) {
         super.visitFieldInsn(opcode, owner, name, descriptor)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitIntInsn(opcode: Int, operand: Int) {
         super.visitIntInsn(opcode, operand)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitIincInsn(`var`: Int, increment: Int) {
         super.visitIincInsn(`var`, increment)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitJumpInsn(opcode: Int, label: Label?) {
         super.visitJumpInsn(opcode, label)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitLdcInsn(value: Any?) {
         super.visitLdcInsn(value)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitMethodInsn(opcode: Int, owner: String?, name: String?, descriptor: String?, isInterface: Boolean) {
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitTypeInsn(opcode: Int, type: String?) {
         super.visitTypeInsn(opcode, type)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitVarInsn(opcode: Int, `var`: Int) {
         super.visitVarInsn(opcode, `var`)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitInvokeDynamicInsn(name: String?, descriptor: String?, bootstrapMethodHandle: Handle?, vararg bootstrapMethodArguments: Any?) {
         super.visitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, *bootstrapMethodArguments)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitLookupSwitchInsn(dflt: Label?, keys: IntArray?, labels: Array<out Label>?) {
         super.visitLookupSwitchInsn(dflt, keys, labels)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitTableSwitchInsn(min: Int, max: Int, dflt: Label?, vararg labels: Label?) {
         super.visitTableSwitchInsn(min, max, dflt, *labels)
-        instructionVisited++
+        instructionIndex++
     }
 
     override fun visitMultiANewArrayInsn(descriptor: String?, numDimensions: Int) {
         super.visitMultiANewArrayInsn(descriptor, numDimensions)
-        instructionVisited++
+        instructionIndex++
     }
 }

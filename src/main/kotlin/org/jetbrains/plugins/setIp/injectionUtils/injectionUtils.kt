@@ -51,7 +51,8 @@ internal fun getAvailableGotoLines(
         ownerTypeName: String,
         targetMethod: MethodName,
         lineTranslator: LineTranslator?,
-        klass: ByteArray
+        klass: ByteArray,
+        jumpFromLine: Int
 ): List<LocalVariableAnalyzeResult>? {
 
     val classReader = ClassReader(klass)
@@ -65,7 +66,8 @@ internal fun getAvailableGotoLines(
             methodName = targetMethod,
             ownerTypeName = ownerTypeName,
             lineTranslator = lineTranslator,
-            lineFilterSet = stackAnalyzerResult
+            lineFilterSet = stackAnalyzerResult,
+            jumpFromLine = jumpFromLine
     )
 }
 

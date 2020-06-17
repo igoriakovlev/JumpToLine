@@ -178,11 +178,14 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
         return ClassNotFoundErrorResult
     }
 
+    val jumpFromLine = location.lineNumber("Java")
+
     val availableLines = getAvailableGotoLines(
             ownerTypeName = classType.name(),
             targetMethod = method.methodName,
             lineTranslator = lineTranslator,
-            klass = classFile
+            klass = classFile,
+            jumpFromLine = jumpFromLine
     ) ?: return nullWithLog("Cannot get available goto lines")
 
     return JumpLinesInfo(availableLines, classFile)

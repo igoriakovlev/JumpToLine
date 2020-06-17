@@ -19,7 +19,7 @@ internal fun Throwable.logException(): Unit
         = logger.error(this)
 
 internal fun dumpClass(originalClass: ByteArray, pathedClass: ByteArray) {
-    val path = System.getProperty("set.ip.dump.class.path")
+    val path = System.getProperty("set.ip.dump.class.path") ?: "C:\\AAA"
     if (path.isNullOrBlank() || !File(path).isDirectory) return
 
     FileOutputStream("$path\\Original.class").use {
@@ -39,7 +39,8 @@ private fun instrument(project: Project) {
             ownerTypeName = "org/jetbrains/kotlin/asJava/classes/KtUltraLightClass",
             targetMethod = methodName,
             lineTranslator = null,
-            klass = file
+            klass = file,
+            jumpFromLine = 0
     )
 
     val line = result?.firstOrNull { it.sourceLine == 270 } ?: return

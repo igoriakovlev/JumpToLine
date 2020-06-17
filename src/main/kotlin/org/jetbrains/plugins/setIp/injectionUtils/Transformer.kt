@@ -52,16 +52,16 @@ internal class Transformer(
             }
 
         private fun emitNullifyLocals() {
-            for ((type, index) in targetLineInfo.locals) {
-                if (index < argumentsCount) continue
+            for (localDescriptor in targetLineInfo.locals) {
+                if (localDescriptor.index < argumentsCount) continue
 
-                if (type.defaultValue === null) {
+                if (localDescriptor.asmType.defaultValue === null) {
                     super.visitInsn(Opcodes.ACONST_NULL)
 
                 } else {
-                    super.visitLdcInsn(type.defaultValue)
+                    super.visitLdcInsn(localDescriptor.asmType.defaultValue)
                 }
-                super.visitVarInsn(type.storeInstruction, index)
+                super.visitVarInsn(localDescriptor.asmType.storeInstruction, localDescriptor.index)
             }
         }
 

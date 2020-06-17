@@ -3,6 +3,7 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
+import com.intellij.debugger.jdi.LocalVariablesUtil
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
@@ -55,10 +56,19 @@ internal fun debuggerJump(
     }
     fun LocalVariable.toDescription() = VariableDescription(name(), signature(), genericSignature())
 
-    val localVariables = currentFrame().visibleVariables()
-                    .filterNot { it.variable.isArgument }
-                    .map { it.variable.toDescription() to currentFrame().getValue(it) }
-                    .filter { it.second !== null }
+    var localVariablesByIJ: List<Pair<Int, Value>>? = null
+    var localVariablesByJDI: List<Pair<VariableDescription, Value>>? = null
+    if (LocalVariablesUtil.canSetValues()) {
+        localVariablesByIJ = LocalVariablesUtil.fetchValues(currentFrame(), process, true)
+            .filterNot { it.key.isParam }
+            .filter { targetLineInfo.locals.any { local -> local.canRestore && local.index == it.key.slot } }
+            .map { it.key.slot to it.value }
+    } else {
+        localVariablesByJDI = currentFrame().visibleVariables()
+                .filterNot { it.variable.isArgument }
+                .map { it.variable.toDescription() to currentFrame().getValue(it) }
+                .filter { it.second !== null }
+    }
 
     process.suspendBreakpoints()
 
@@ -86,7 +96,6 @@ internal fun debuggerJump(
         setValue(variable, value)
         return
     }
-
     InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false) {
 
         fun resumeBreakpointsAndThrow(message: String): Nothing {
@@ -109,10 +118,17 @@ internal fun debuggerJump(
             val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
 
             if (stackTargetFrame != null) {
-                localVariables.forEach {
-                    stackTargetFrame.trySetValue(it.first, it.second)
+                if (LocalVariablesUtil.canSetValues() && localVariablesByIJ != null) {
+                    localVariablesByIJ.forEach {
+                        LocalVariablesUtil.setValue(stackTargetFrame, it.first, it.second)
+                    }
+                } else if (localVariablesByJDI != null) {
+                    localVariablesByJDI.forEach {
+                        stackTargetFrame.trySetValue(it.first, it.second)
+                    }
                 }
             }
+
             process.resumeBreakpoints()
         }
     }
