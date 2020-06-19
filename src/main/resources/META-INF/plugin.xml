@@ -6,7 +6,7 @@
 
   <depends>com.intellij.modules.lang</depends>
   <depends>com.intellij.modules.java</depends>
-  <idea-version since-build="201"/>
+  <idea-version since-build="201.3803.32"/>
 
   <description>Moves your execution point anywhere possible position</description>
 

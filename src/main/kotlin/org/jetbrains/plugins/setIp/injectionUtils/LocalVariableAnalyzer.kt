@@ -8,7 +8,7 @@ import org.jetbrains.plugins.setIp.LineTranslator
 internal typealias LocalsFrame = List<Any>
 
 internal open class LocalSemiDescriptor(val index: Int, val asmType: Type)
-internal class LocalDescriptor(index: Int, asmType: Type, val canRestore: Boolean) : LocalSemiDescriptor(index, asmType)
+internal class LocalDescriptor(index: Int, asmType: Type, val saveRestoreStatus: LocalVariableAnalyzer.SaveRestoreStatus) : LocalSemiDescriptor(index, asmType)
 internal data class UserVisibleLocal(val name: String, val descriptor: String, val signature: String?, val start: Label, val end: Label, val index: Int)
 
 internal data class LocalVariableAnalyzeResult(
@@ -51,30 +51,76 @@ internal class LocalVariableAnalyzer private constructor(
 
     private val localVariablesWithRanges: MutableMap<Int, MutableList<UserVisibleLocal>> = mutableMapOf()
 
-    private val localVariablesAccessRegions: MutableMap<Int, MutableList<Pair<Long, Long>>> = mutableMapOf()
+    private data class AccessRange(val start: Long, val end: Long)
+    private data class AccessJumpRange(val start: Long, val end: Long, val label: Label)
+    private val localVariablesAccessRegions: MutableMap<Int, MutableList<AccessRange>> = mutableMapOf()
+    private val localVariablesJumpAccessRegions: MutableMap<Int, MutableList<AccessJumpRange>> = mutableMapOf()
     private val localVariablesStoreIndexes: MutableMap<Int, Long> = mutableMapOf()
 
     private val labelToIndex: MutableMap<Label, Long> = mutableMapOf()
 
     private var sourceLineIndex: Long? = null
 
-    private fun canBeRestored(local: Int, onIndex: Long): Boolean {
 
-        val ranges = localVariablesWithRanges[local] ?: return false
-
-        return ranges.any {
-            val firstIndex = labelToIndex[it.start] ?: return@any false
-            val lastIndex = labelToIndex[it.end] ?: return@any false
-            onIndex in firstIndex..lastIndex && sourceLineIndex in firstIndex..lastIndex
-        }
+    enum class SaveRestoreStatus {
+        CanBeRestored,
+        CanBeSavedAndRestored,
+        IsParameter,
+        None
     }
 
-    private fun isLocalAccessible(local: Int, onIndex: Long): Boolean {
-        val ranges = localVariablesAccessRegions[local] ?: return false
+    private fun getSaveRestoreStatus(local: Int, onIndex: Long): SaveRestoreStatus {
 
-        return ranges.any {
-            onIndex in it.first..it.second
+        if (local < firstLocalsFrame.size) return SaveRestoreStatus.IsParameter
+
+        val ranges = localVariablesWithRanges[local] ?: return SaveRestoreStatus.None
+
+        var resultStatus = SaveRestoreStatus.None
+        ranges.forEach {
+            val firstIndex = labelToIndex[it.start]
+            val lastIndex = labelToIndex[it.end]
+
+            if (firstIndex != null && lastIndex != null) {
+                val canBeSaved = sourceLineIndex in firstIndex..lastIndex
+                val canBeRestored = onIndex in firstIndex..lastIndex
+
+                if (canBeSaved && canBeRestored) return SaveRestoreStatus.CanBeSavedAndRestored
+                if (canBeRestored) resultStatus = SaveRestoreStatus.CanBeRestored
+            }
         }
+
+        return resultStatus
+    }
+
+    private class LazyMutableSet {
+        val mutableSet: MutableSet<Long> by lazy { mutableSetOf<Long>() }
+    }
+
+    private fun isLocalAccessible(local: Int, onIndex: Long): Boolean =
+            isLocalAccessible(local, onIndex, LazyMutableSet())
+
+    private fun isLocalAccessible(local: Int, onIndex: Long, visitedJumps: LazyMutableSet): Boolean {
+        val readAccess = localVariablesAccessRegions[local]?.let { ranges ->
+            ranges.any {
+                onIndex in it.start..it.end
+            }
+        } ?: false
+
+        if (readAccess) return true
+
+        val jumpRanges = localVariablesJumpAccessRegions[local] ?: return false
+
+        for (jumpRange in jumpRanges) {
+            if (onIndex in jumpRange.start..jumpRange.end) {
+                val targetLabelIndex = labelToIndex[jumpRange.label] ?: continue
+                if (visitedJumps.mutableSet.contains(targetLabelIndex)) continue
+
+                visitedJumps.mutableSet.add(targetLabelIndex)
+                if (isLocalAccessible(local, targetLabelIndex, visitedJumps)) return true
+            }
+        }
+
+        return false
     }
 
     private val analyzeResult: List<LocalVariableAnalyzeResult>? get() {
@@ -85,12 +131,12 @@ internal class LocalVariableAnalyzer private constructor(
         return semiResult.map {
 
             val localsDescriptors = it.value.locals.map { semiDescriptor ->
-                val canRestore = canBeRestored(semiDescriptor.index, it.value.instructionIndex)
-                LocalDescriptor(semiDescriptor.index, semiDescriptor.asmType, canRestore)
+                val status = getSaveRestoreStatus(semiDescriptor.index, it.value.instructionIndex)
+                LocalDescriptor(semiDescriptor.index, semiDescriptor.asmType, status)
             }
 
             val allVariablesIsSafe = localsDescriptors.all { local ->
-                local.canRestore || !isLocalAccessible(local.index, it.value.instructionIndex)
+                local.saveRestoreStatus != SaveRestoreStatus.None || !isLocalAccessible(local.index, it.value.instructionIndex)
             }
 
             val isSafe = allVariablesIsSafe //&& !duplicatedLines.contains(it.key)
@@ -153,13 +199,38 @@ internal class LocalVariableAnalyzer private constructor(
         val regionsList =
                 localVariablesAccessRegions.getOrCreate(index) { mutableListOf() }
 
-        regionsList.add(Pair(storeIndex, instructionIndex))
+        regionsList.add(AccessRange(storeIndex, instructionIndex))
+    }
+
+    private fun processLocalJump(index: Int, label: Label) {
+        val storeIndex = localVariablesStoreIndexes[index] ?: 0
+        val regionsList =
+                localVariablesJumpAccessRegions.getOrCreate(index) { mutableListOf() }
+
+        regionsList.add(AccessJumpRange(storeIndex, instructionIndex, label))
     }
 
     override fun visitIincInsn(`var`: Int, increment: Int) {
         processLocalRead(`var`)
         processLocalWrite(`var`)
         super.visitIincInsn(`var`, increment)
+    }
+
+    override fun visitJumpInsn(opcode: Int, label: Label?) {
+        if (label != null) {
+            analyzerAdapter!!.locals.forEachIndexed { index, type ->
+                if (type != null) {
+                    processLocalJump(index, label)
+                }
+            }
+        } else {
+            analyzerAdapter!!.locals.forEachIndexed { index, type ->
+                if (type != null) {
+                    processLocalRead(index)
+                }
+            }
+        }
+        super.visitJumpInsn(opcode, label)
     }
 
     override fun visitVarInsn(opcode: Int, `var`: Int) {
@@ -193,7 +264,7 @@ internal class LocalVariableAnalyzer private constructor(
 
     private fun createIndexesForCurrentPosition(localsCount: Int) {
         localVariablesStoreIndexes.clear()
-        for (local in localsCount until localsCount) {
+        for (local in 0 until localsCount) {
             localVariablesStoreIndexes[local] = instructionIndex
         }
     }
@@ -202,7 +273,7 @@ internal class LocalVariableAnalyzer private constructor(
 
         super.visitFrame(type, numLocal, local, numStack, stack)
 
-        createIndexesForCurrentPosition(numLocal)
+        //createIndexesForCurrentPosition(numLocal)
 
         instructionCountOnFrames.add(instructionIndex)
 

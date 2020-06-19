@@ -6,6 +6,8 @@ import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
 import com.intellij.debugger.jdi.DecompiledLocalVariable
 import com.intellij.debugger.jdi.LocalVariablesUtil
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
+import com.jetbrains.jdi.SlotLocalVariable
+import com.jetbrains.jdi.StackFrameImpl
 import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
@@ -57,12 +59,28 @@ internal fun debuggerJump(
     }
     fun LocalVariable.toDescription() = VariableDescription(name(), signature(), genericSignature())
 
-    var localVariablesByIJ: Map<DecompiledLocalVariable, Value>? = null
+    var localVariablesByIJ: List<Pair<SlotLocalVariable, Value>>? = null
     var localVariablesByJDI: List<Pair<VariableDescription, Value>>? = null
-    if (LocalVariablesUtil.canSetValues()) {
-        localVariablesByIJ = LocalVariablesUtil.fetchValues(currentFrame(), process, true)
-            .filterNot { it.key.isParam }
-            .filter { targetLineInfo.locals.any { local -> local.canRestore && local.index == it.key.slot() } }
+
+    val jbJDIStack = currentFrame().stackFrame as? StackFrameImpl
+    if (LocalVariablesUtil.canSetValues() && jbJDIStack != null) {
+
+        fun LocalDescriptor.toSlotLocalVariable() = object : SlotLocalVariable {
+            override fun slot(): Int = index
+            override fun signature(): String = asmType.toString()
+        }
+
+        val localsToSafeAndRestore = targetLineInfo.locals
+                .filter { it.saveRestoreStatus == LocalVariableAnalyzer.SaveRestoreStatus.CanBeSavedAndRestored }
+                .map { it.toSlotLocalVariable() }
+
+        try {
+            val slotValues = jbJDIStack.getSlotsValues(localsToSafeAndRestore)
+            localVariablesByIJ = localsToSafeAndRestore.zip(slotValues)
+        } catch (e: Exception) {
+            return unitWithLog("Exception getting values by slots: $e")
+        }
+
     } else {
         localVariablesByJDI = currentFrame().visibleVariables()
                 .filterNot { it.variable.isArgument }
@@ -118,9 +136,14 @@ internal fun debuggerJump(
             val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
 
             if (stackTargetFrame != null) {
-                if (LocalVariablesUtil.canSetValues() && localVariablesByIJ != null) {
+                val jbJDITargetStack = stackTargetFrame as? StackFrameImpl
+                if (jbJDITargetStack != null && LocalVariablesUtil.canSetValues() && localVariablesByIJ != null) {
                     localVariablesByIJ.forEach {
-                        LocalVariablesUtil.setValue(stackTargetFrame, it.key, it.value)
+                        try {
+                            jbJDITargetStack.setSlotValue(it.first, it.second)
+                        } catch (e: Exception) {
+                            unitWithLog("Exception setting values to slots: $e")
+                        }
                     }
                 } else localVariablesByJDI?.forEach {
                     stackTargetFrame.trySetValue(it.first, it.second)

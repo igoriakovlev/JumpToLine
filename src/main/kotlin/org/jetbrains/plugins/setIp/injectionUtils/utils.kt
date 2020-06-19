@@ -19,7 +19,7 @@ internal fun Throwable.logException(): Unit
         = logger.error(this)
 
 internal fun dumpClass(originalClass: ByteArray, pathedClass: ByteArray) {
-    val path = System.getProperty("set.ip.dump.class.path") ?: "C:\\AAA"
+    val path = System.getProperty("set.ip.dump.class.path")
     if (path.isNullOrBlank() || !File(path).isDirectory) return
 
     FileOutputStream("$path\\Original.class").use {
