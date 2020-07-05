@@ -3,7 +3,6 @@ package org.jetbrains.plugins.setIp
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.events.DebuggerContextCommandImpl
-import com.intellij.debugger.jdi.DecompiledLocalVariable
 import com.intellij.debugger.jdi.LocalVariablesUtil
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.jetbrains.jdi.SlotLocalVariable
@@ -12,6 +11,7 @@ import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.setIp.injectionUtils.*
+
 
 /**
  * JRE Stepping bug patch after class redefinition
@@ -170,4 +170,31 @@ internal fun jumpByFrameDrop(
 
     val stepInCommand = process.createStepIntoCommand(process.suspendManager.pausedContext, true, null)
     stepInCommand.action()
+}
+
+internal fun jumpByRunToLine(
+        process: DebugProcessImpl,
+        suspendContext: SuspendContextImpl,
+        threadProxy: ThreadReferenceProxyImpl,
+        line: Int)
+{
+    fun currentFrame() = threadProxy.frame(0)
+    val method = currentFrame().location().method()
+
+    val runToLocation = method.locationsOfLine(line)
+            ?.minBy { it.codeIndex() }
+            ?: return unitWithLog("Cannot find line location for RunTo")
+
+    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
+    popFrameCommand.threadAction(suspendContext)
+
+    val steppingBreakpoint = RunToCursorBreakpoint(project = process.project)
+    process.setSteppingBreakpoint(steppingBreakpoint)
+    process.requestsManager.run {
+        enableRequest(createBreakpointRequest(steppingBreakpoint, runToLocation).also {
+            filterThread = threadProxy.threadReference
+        })
+    }
+
+    process.suspendManager.resume(process.suspendManager.pausedContext)
 }

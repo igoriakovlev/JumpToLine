@@ -18,7 +18,8 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
-import java.awt.*
+import java.awt.Color
+import java.awt.Cursor
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
 
@@ -29,6 +30,7 @@ internal class SetIPArrowGutter(
 ): GutterDraggableObject {
 
     private var highlighters: List<RangeHighlighter>? = null
+    private var highlightersIsForGoto: Boolean = false
 
     private var documentCached: Document? = null
     private val document: Document? get() {
@@ -53,11 +55,19 @@ internal class SetIPArrowGutter(
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
 
+        reSetterByMouseLeave.remove()
         resetHighlighters()
 
         if (line == currentLine) return false
 
         val jumpInfo = currentJumpInfo ?: return false
+
+        if (actionId == 1) {
+            val gotoLine = jumpInfo.linesToGoto.firstOrNull { it.sourceLine - 1 == line } ?: return false
+            tryJumpToByGoto(session, gotoLine.javaLine)
+            return false
+        }
+
         val selected = localAnalysisByRenderLine(line) ?: return false
 
         if (!selected.isSafeLine) {
@@ -88,8 +98,6 @@ internal class SetIPArrowGutter(
 
     private fun resetHighlighters() {
 
-        remove()
-
         val currentHighlighters = highlighters ?: return
         highlighters = null
 
@@ -98,18 +106,31 @@ internal class SetIPArrowGutter(
         }
     }
 
-    private fun updateHighlighters() {
-        if (highlighters != null) return
+    private fun updateHighlighters(highlightGoTo: Boolean) {
+        if (highlighters != null && highlightGoTo == highlightersIsForGoto) return
+
+
+        highlightersIsForGoto = highlightGoTo
+        resetHighlighters()
 
         val lineCount = document?.lineCount
         val markupModel = markupModel
         if (markupModel != null && lineCount != null) {
-            highlighters = currentJumpInfo?.linesToJump?.mapNotNull { line ->
-                val lineToSet = line.sourceLine - 1
-                if (lineToSet <= lineCount && lineToSet != currentLine) {
-                    val attributes = if (line.isSafeLine) safeLineAttribute else unsageLineAttribute
-                    markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                } else null
+            if (!highlightersIsForGoto) {
+                highlighters = currentJumpInfo?.linesToJump?.mapNotNull { line ->
+                    val lineToSet = line.sourceLine - 1
+                    if (lineToSet <= lineCount && lineToSet != currentLine) {
+                        val attributes = if (line.isSafeLine) safeLineAttribute else unsageLineAttribute
+                        markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
+                    } else null
+                }
+            } else {
+                highlighters = currentJumpInfo?.linesToGoto?.mapNotNull { line ->
+                    val lineToSet = line.sourceLine - 1
+                    if (lineToSet <= lineCount && lineToSet != currentLine) {
+                        markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+                    } else null
+                }
             }
             reSetterByMouseLeave.install()
         }
@@ -123,6 +144,8 @@ internal class SetIPArrowGutter(
 
         fun install() {
 
+            if (installedGutterComponent?.mouseListeners?.contains(this) == true) return
+
             val editor = session.xDebugSession
                     ?.currentPosition
                     ?.file
@@ -132,7 +155,6 @@ internal class SetIPArrowGutter(
                     editor.castSafelyTo<TextEditor>()
                             ?.editor.castSafelyTo<EditorEx>()
                             ?.gutterComponentEx
-
             installedGutterComponent?.addMouseListener(this)
         }
 
@@ -142,21 +164,15 @@ internal class SetIPArrowGutter(
         }
 
         override fun mouseReleased(e: MouseEvent?) {}
-
         override fun mouseEntered(e: MouseEvent?) {}
-
+        override fun mouseExited(e: MouseEvent?) {}
         override fun mouseClicked(e: MouseEvent?) {}
-
         override fun mousePressed(e: MouseEvent?) {}
-
-        override fun mouseExited(e: MouseEvent?) {
-            resetHighlighters()
-        }
     }
 
     override fun getCursor(line: Int, actionId: Int): Cursor {
-        if (actionId != 2) return DefaultCursor
-        updateHighlighters()
+        if (actionId != 1 && actionId != 2) return DefaultCursor
+        updateHighlighters(actionId == 1)
         return DefaultCursor
     }
 

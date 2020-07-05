@@ -101,8 +101,11 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
     } > 1
 }
 
+
+internal data class LineToGoTo(val javaLine: Int, val sourceLine: Int)
+
 internal sealed class GetLinesToJumpResult
-internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray?) : GetLinesToJumpResult()
+internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray?, val linesToGoto: List<LineToGoTo>) : GetLinesToJumpResult()
 internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
@@ -149,6 +152,11 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
         if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
     }
 
+    val linesToGoto = method.allLineLocations()
+            .map { it.lineNumber("Java") }
+            .distinct()
+            .map { LineToGoTo(it, lineTranslator?.translate(it) ?: it ) }
+
     val onlyJumpByFrameDrop = method.isConstructor || checkIsTopMethodRecursive(location, threadProxy)
     if (onlyJumpByFrameDrop) {
         val javaLine = method.allLineLocations()
@@ -170,7 +178,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
                 frameOnFirstInstruction = false,
                 localsFrame = emptyList()
         )
-        return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null)
+        return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null, linesToGoto = linesToGoto)
     }
 
     val classFile = process.tryGetTypeByteCode(threadProxy.threadReference, classType) ?: run {
@@ -188,7 +196,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             jumpFromLine = jumpFromLine
     ) ?: return nullWithLog("Cannot get available goto lines")
 
-    return JumpLinesInfo(availableLines, classFile)
+    return JumpLinesInfo(availableLines, classFile, linesToGoto)
 }
 
 internal fun tryJumpToSelectedLine(
@@ -209,6 +217,44 @@ internal fun tryJumpToSelectedLine(
         }
     }
     session.process.managerThread.schedule(command)
+}
+
+internal fun tryJumpToByGoto(
+    session: DebuggerSession,
+    line: Int
+) {
+    val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
+        override fun threadAction(suspendContext: SuspendContextImpl) {
+            jumpByRunToLineImpl(
+                    session = session,
+                    suspendContext = suspendContext,
+                    line = line
+            )
+        }
+    }
+    session.process.managerThread.schedule(command)
+}
+
+private fun jumpByRunToLineImpl(
+        session: DebuggerSession,
+        suspendContext: SuspendContextImpl,
+        line: Int
+) {
+    val process = session.process
+
+    val context = process.debuggerContext
+    val threadProxy = context.threadProxy ?: return unitWithLog("Cannot get threadProxy")
+
+    if (!threadProxy.isSuspended) return unitWithLog("Calling jump on unsuspended thread")
+
+    if (threadProxy.frameCount() < 2) return unitWithLog("frameCount < 2")
+
+    jumpByRunToLine(
+        process = process,
+        suspendContext = suspendContext,
+        threadProxy = threadProxy,
+        line = line
+    )
 }
 
 private fun tryJumpToSelectedLineImpl(
