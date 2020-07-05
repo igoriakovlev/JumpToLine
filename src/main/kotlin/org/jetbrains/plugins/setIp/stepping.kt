@@ -185,8 +185,12 @@ internal fun jumpByRunToLine(
             ?.minBy { it.codeIndex() }
             ?: return unitWithLog("Cannot find line location for RunTo")
 
-    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
-    popFrameCommand.threadAction(suspendContext)
+    val codeLocation = currentFrame().location()
+
+    if (codeLocation.codeIndex() > runToLocation.codeIndex()) {
+        val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
+        popFrameCommand.threadAction(suspendContext)
+    }
 
     val steppingBreakpoint = RunToCursorBreakpoint(project = process.project)
     process.setSteppingBreakpoint(steppingBreakpoint)
