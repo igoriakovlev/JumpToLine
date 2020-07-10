@@ -10,9 +10,9 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
     private val linesFound = mutableSetOf<Int>()
     private val linesVisited = mutableSetOf<Int>()
 
-    private var frameExpected = false
-    private var lineOfExpectedFrame: Int = 0
     private var firstLineVisited = false
+
+    private val linesExpectedFromFrame = mutableSetOf<Int>()
 
     override var analyzerAdapter: AnalyzerAdapter? = null
 
@@ -20,14 +20,12 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
 
         super.visitFrame(type, numLocal, local, numStack, stack)
 
-        if (stack === null) return
+        if (linesExpectedFromFrame.isEmpty()) return
 
-        if (!frameExpected) return
-        frameExpected = false
-
-        if (stack.all { it === null }) {
-            linesFound.add(lineOfExpectedFrame)
+        if (stack === null || numStack == 0) {
+            linesFound.addAll(linesExpectedFromFrame)
         }
+        linesExpectedFromFrame.clear()
     }
 
     override fun visitLineNumber(line: Int, start: Label?) {
@@ -35,6 +33,7 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
         super.visitLineNumber(line, start)
 
         if (!linesVisited.add(line)) return
+        if (linesExpectedFromFrame.contains(line)) return
 
         if (!firstLineVisited) {
             linesFound.add(line)
@@ -49,8 +48,7 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
                 linesFound.add(line)
             }
         } else {
-            frameExpected = true
-            lineOfExpectedFrame = line
+            linesExpectedFromFrame.add(line)
         }
     }
 
