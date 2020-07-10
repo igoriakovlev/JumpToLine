@@ -2,6 +2,7 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.sun.jdi.*
+import com.sun.jdi.ObjectReference.INVOKE_SINGLE_THREADED
 import java.util.*
 
 private fun ThreadReference.invokeInstance(
@@ -12,7 +13,7 @@ private fun ThreadReference.invokeInstance(
         parameters: List<Value>
 ): Value? {
     val method = klass.concreteMethodByName(name, signature) ?: return null
-    return obj.invokeMethod(this, method, parameters, 0)
+    return obj.invokeMethod(this, method, parameters, INVOKE_SINGLE_THREADED)
 }
 
 private fun ThreadReference.invokeStatic(
@@ -20,7 +21,7 @@ private fun ThreadReference.invokeStatic(
         name: String,
         signature: String,
         parameters: List<Value>
-) = klass.invokeMethod(this, klass.concreteMethodByName(name, signature), parameters, 0)
+) = klass.invokeMethod(this, klass.concreteMethodByName(name, signature), parameters, INVOKE_SINGLE_THREADED)
 
 internal fun DebugProcessImpl.tryGetTypeByteCode(
         threadReference: ThreadReference,
@@ -51,7 +52,7 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
 
     fun getClassForName(className: String): ClassType? = classTypeCacheValue.getOrPut(className) {
         val forNameMethod = classType.concreteMethodByName("forName", "(Ljava/lang/String;)Ljava/lang/Class;")
-        val loadedClass = classType.invokeMethod(this, forNameMethod, listOf(virtualMachine.mirrorOf(className)), 0) as ClassObjectReference
+        val loadedClass = classType.invokeMethod(this, forNameMethod, listOf(virtualMachine.mirrorOf(className)), INVOKE_SINGLE_THREADED) as ClassObjectReference
         loadedClass.reflectedType() as? ClassType
     }
 

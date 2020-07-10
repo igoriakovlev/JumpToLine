@@ -1,6 +1,7 @@
 package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.impl.DebuggerSession
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.ex.EditorEx
@@ -101,14 +102,18 @@ internal class SetIPArrowGutter(
         val currentHighlighters = highlighters ?: return
         highlighters = null
 
-        currentHighlighters.forEach {
-            markupModel?.removeHighlighter(it)
+        val application = ApplicationManager.getApplication()
+        application.invokeLater {
+            application.runWriteAction {
+                currentHighlighters.forEach {
+                    markupModel?.removeHighlighter(it)
+                }
+            }
         }
     }
 
     private fun updateHighlighters(highlightGoTo: Boolean) {
         if (highlighters != null && highlightGoTo == highlightersIsForGoto) return
-
 
         highlightersIsForGoto = highlightGoTo
         resetHighlighters()
@@ -165,7 +170,11 @@ internal class SetIPArrowGutter(
 
         override fun mouseReleased(e: MouseEvent?) {}
         override fun mouseEntered(e: MouseEvent?) {}
-        override fun mouseExited(e: MouseEvent?) {}
+
+        override fun mouseExited(e: MouseEvent?) {
+            resetHighlighters()
+        }
+
         override fun mouseClicked(e: MouseEvent?) {}
         override fun mousePressed(e: MouseEvent?) {}
     }
