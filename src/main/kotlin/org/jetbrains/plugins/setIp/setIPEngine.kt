@@ -47,7 +47,6 @@ private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threa
 private const val UNKNOWN_ERROR0 = "Cant jump for unknown reason (#0)"
 private const val UNKNOWN_ERROR1 = "Cant jump for unknown reason (#1)"
 private const val UNKNOWN_ERROR2 = "Cant jump for unknown reason (#2)"
-private const val UNKNOWN_ERROR3 = "Cant jump for unknown reason (#3)"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
@@ -59,8 +58,6 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
 
     if (!xsession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
 
-    if (!session.process.isEvaluationPossible) return false to UNKNOWN_ERROR1
-
     if (!process.virtualMachineProxy.isSuspended)
         return false to NOT_SUSPENDED
 
@@ -68,14 +65,14 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
 
     if (context.suspendContext?.suspendPolicy != 2) return false to NOT_ALL_THREADS_ARE_SUSPENDED
 
-    val threadProxy = context.threadProxy ?: return false to UNKNOWN_ERROR2
+    val threadProxy = context.threadProxy ?: return false to UNKNOWN_ERROR1
 
     if (!threadProxy.isSuspended)
         return false to NOT_SUSPENDED
 
     if (threadProxy.frameCount() < 2) return false to MAIN_FUNCTION_CALL
 
-    val method = threadProxy.frame(0)?.location()?.method() ?: return false to UNKNOWN_ERROR3
+    val method = threadProxy.frame(0)?.location()?.method() ?: return false to UNKNOWN_ERROR2
 
     if (method.signature().matches(coroutineRegex)) return false to COROUTINE_SUSPECTED
 
@@ -105,8 +102,7 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
 internal data class LineToGoTo(val javaLine: Int, val sourceLine: Int)
 
 internal sealed class GetLinesToJumpResult
-internal class JumpLinesInfo(val linesToJump: List<LocalVariableAnalyzeResult>, val classFile: ByteArray?, val linesToGoto: List<LineToGoTo>) : GetLinesToJumpResult()
-internal object ClassNotFoundErrorResult : GetLinesToJumpResult()
+internal class JumpLinesInfo(val linesToJump: List<JumpLineAnalyzeResult>?, val classFile: ByteArray?, val linesToGoto: List<LineToGoTo>, val firstLine: LineToGoTo?) : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
 internal fun tryGetLinesToJump(session: DebuggerSession) =
@@ -134,8 +130,6 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
 
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
 
-    if (!process.isEvaluationPossible) return nullWithLog("Evaluation is not possible")
-
     val context = process.debuggerContext
 
     val threadProxy = context.threadProxy ?: return nullWithLog("Cannot get threadProxy")
@@ -157,53 +151,38 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             .distinct()
             .map { LineToGoTo(it, lineTranslator?.translate(it) ?: it ) }
 
-    val onlyJumpByFrameDrop = method.isConstructor || checkIsTopMethodRecursive(location, threadProxy)
-    if (onlyJumpByFrameDrop) {
-        val javaLine = method.allLineLocations()
-                .map { it.lineNumber("Java") }
-                .min()
-                ?: return UnknownErrorResult
+    val firstLine = linesToGoto.minBy { it.javaLine }
 
-        val translatedLine = lineTranslator?.translate(javaLine) ?: javaLine
+    val jumpOnLineAvailable = !method.isConstructor &&
+            !checkIsTopMethodRecursive(location, threadProxy) &&
+            process.isEvaluationPossible
 
-        val firstLineAnalyze = LocalVariableAnalyzeResult(
-                javaLine = javaLine,
-                sourceLine = translatedLine,
-                locals = emptyList(),
-                fistLocalsFrame = emptyList(),
-                isSafeLine = true,
-                isFirstLine = true,
-                methodLocalsCount = 0,
-                instantFrame = true,
-                frameOnFirstInstruction = false,
-                localsFrame = emptyList()
-        )
-        return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null, linesToGoto = linesToGoto)
+    val jumpLines: Pair<List<JumpLineAnalyzeResult>, ByteArray>? = jumpOnLineAvailable.onTrue {
+        val byteCode = tryGetTypeByteCode(threadProxy.threadReference, classType)
+                ?: nullWithLog<ByteArray>("Cannot get class file for ${classType.name()}")
+
+        byteCode?.let { klass ->
+            val analyzeResult = getAvailableJumpLines(
+                    ownerTypeName = classType.name(),
+                    targetMethod = method.methodName,
+                    lineTranslator = lineTranslator,
+                    klass = klass,
+                    jumpFromLine = location.lineNumber("Java"),
+                    analyzeFirstLine = false //We skip the first line because it is not need to analyze for jump
+            ) ?: nullWithLog<List<JumpLineAnalyzeResult>>("Cannot get available goto lines")
+
+            analyzeResult?.let { it to klass }
+        }
     }
 
-    val classFile = tryGetTypeByteCode(threadProxy.threadReference, classType) ?: run {
-        unitWithLog("Cannot get class file for ${classType.name()}")
-        return ClassNotFoundErrorResult
-    }
-
-    val jumpFromLine = location.lineNumber("Java")
-
-    val availableLines = getAvailableGotoLines(
-            ownerTypeName = classType.name(),
-            targetMethod = method.methodName,
-            lineTranslator = lineTranslator,
-            klass = classFile,
-            jumpFromLine = jumpFromLine
-    ) ?: return nullWithLog("Cannot get available goto lines")
-
-    return JumpLinesInfo(availableLines, classFile, linesToGoto)
+    return JumpLinesInfo(jumpLines?.first, jumpLines?.second, linesToGoto, firstLine)
 }
 
 internal fun tryJumpToSelectedLine(
-    session: DebuggerSession,
-    targetLineInfo: LocalVariableAnalyzeResult,
-    classFile: ByteArray?,
-    commonTypeResolver: CommonTypeResolver
+        session: DebuggerSession,
+        targetLineInfo: JumpLineAnalyzeResult,
+        classFile: ByteArray?,
+        commonTypeResolver: CommonTypeResolver
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
@@ -258,11 +237,11 @@ private fun jumpByRunToLineImpl(
 }
 
 private fun tryJumpToSelectedLineImpl(
-    session: DebuggerSession,
-    targetLineInfo: LocalVariableAnalyzeResult,
-    classFile: ByteArray?,
-    commonTypeResolver: CommonTypeResolver,
-    suspendContext: SuspendContextImpl
+        session: DebuggerSession,
+        targetLineInfo: JumpLineAnalyzeResult,
+        classFile: ByteArray?,
+        commonTypeResolver: CommonTypeResolver,
+        suspendContext: SuspendContextImpl
 ) {
     val process = session.process
 
@@ -281,23 +260,16 @@ private fun tryJumpToSelectedLineImpl(
 
     val classType = location.declaringType() as? ClassType ?: return unitWithLog("Invalid location type")
 
-    if (targetLineInfo.isFirstLine) {
-        jumpByFrameDrop(
-                process = process,
-                suspendContext = suspendContext
-        )
-    } else {
-        val checkedClassFile = classFile ?: return unitWithLog("Cannot jump to not-first-line without class file")
-        debuggerJump(
-                targetLineInfo = targetLineInfo,
-                declaredType = classType,
-                originalClassFile = checkedClassFile,
-                threadProxy = threadProxy,
-                commonTypeResolver = commonTypeResolver,
-                process = process,
-                suspendContext = suspendContext
-        )
-    }
+    val checkedClassFile = classFile ?: return unitWithLog("Cannot jump to not-first-line without class file")
+    debuggerJump(
+            targetLineInfo = targetLineInfo,
+            declaredType = classType,
+            originalClassFile = checkedClassFile,
+            threadProxy = threadProxy,
+            commonTypeResolver = commonTypeResolver,
+            process = process,
+            suspendContext = suspendContext
+    )
 }
 
 private fun <T : Any> DebugProcessImpl.invokeInManagerThread(f: (DebuggerContextImpl) -> T?): T? {

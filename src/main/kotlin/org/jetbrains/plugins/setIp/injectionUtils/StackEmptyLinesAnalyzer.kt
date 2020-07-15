@@ -5,7 +5,7 @@ import org.objectweb.asm.Label
 import org.objectweb.asm.commons.AnalyzerAdapter
 import org.jetbrains.plugins.setIp.LineTranslator
 
-internal class StackEmptyLocatorAnalyzer private constructor(private val lineTranslator: LineTranslator?) : SingleMethodAnalyzer() {
+internal class StackEmptyLocatorAnalyzer private constructor(private val lineTranslator: LineTranslator?, private val addFirstLine: Boolean) : SingleMethodAnalyzer() {
 
     private val linesFound = mutableSetOf<Int>()
     private val linesVisited = mutableSetOf<Int>()
@@ -36,7 +36,7 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
         if (linesExpectedFromFrame.contains(line)) return
 
         if (!firstLineVisited) {
-            linesFound.add(line)
+            if (addFirstLine) linesFound.add(line)
             firstLineVisited = true
             return
         }
@@ -57,10 +57,11 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
                 classReader: ClassReader,
                 methodName: MethodName,
                 ownerTypeName: String,
-                lineTranslator: LineTranslator?
+                lineTranslator: LineTranslator?,
+                addFirstLine: Boolean
         ): Set<Int>? {
 
-            val methodVisitor = StackEmptyLocatorAnalyzer(lineTranslator)
+            val methodVisitor = StackEmptyLocatorAnalyzer(lineTranslator, addFirstLine)
 
             val classVisitor = SingleMethodVisitorForClass(methodName, ownerTypeName, methodVisitor)
 

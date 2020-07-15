@@ -19,6 +19,8 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
+import org.jetbrains.plugins.setIp.injectionUtils.onTrue
+import org.w3c.dom.ranges.Range
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -66,6 +68,12 @@ internal class SetIPArrowGutter(
         if (actionId == 1) {
             val gotoLine = jumpInfo.linesToGoto.firstOrNull { it.sourceLine - 1 == line } ?: return false
             tryJumpToByGoto(session, gotoLine.javaLine)
+            return false
+        }
+
+        val firstLine = jumpInfo.firstLine
+        if (firstLine != null && line == firstLine.sourceLine - 1) {
+            tryJumpToByGoto(session, firstLine.javaLine)
             return false
         }
 
@@ -122,13 +130,31 @@ internal class SetIPArrowGutter(
         val markupModel = markupModel
         if (markupModel != null && lineCount != null) {
             if (!highlightersIsForGoto) {
-                highlighters = currentJumpInfo?.linesToJump?.mapNotNull { line ->
-                    val lineToSet = line.sourceLine - 1
-                    if (lineToSet <= lineCount && lineToSet != currentLine) {
-                        val attributes = if (line.isSafeLine) safeLineAttribute else unsageLineAttribute
-                        markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                    } else null
+
+                val linesToJump = currentJumpInfo?.linesToJump
+                val firstLine = currentJumpInfo?.firstLine
+
+                if ((linesToJump?.any() == true) || firstLine != null) {
+
+                    val jumpHighlighters = mutableListOf<RangeHighlighter>()
+
+                    linesToJump?.forEach { lineToJump ->
+                        val lineToSet = lineToJump.sourceLine - 1
+                        (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
+                            val attributes = if (lineToJump.isSafeLine) safeLineAttribute else unsageLineAttribute
+                            val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
+                            jumpHighlighters.add(highlighter)
+                        }
+                    }
+
+                    if (firstLine != null) {
+                        val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+                        jumpHighlighters.add(firstLineHighlighter)
+                    }
+
+                    highlighters = jumpHighlighters
                 }
+
             } else {
                 highlighters = currentJumpInfo?.linesToGoto?.mapNotNull { line ->
                     val lineToSet = line.sourceLine - 1

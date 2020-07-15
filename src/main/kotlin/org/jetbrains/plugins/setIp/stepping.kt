@@ -24,7 +24,7 @@ private fun jreSteppingBugPatch(eventRequestManager: EventRequestManager, thread
 }
 
 internal fun debuggerJump(
-        targetLineInfo: LocalVariableAnalyzeResult,
+        targetLineInfo: JumpLineAnalyzeResult,
         declaredType: ClassType,
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
@@ -159,17 +159,6 @@ internal fun debuggerJump(
     // We should not resume it by command because Command will recreate user breakpoints that we have to avoid
 //    val resumeThread = process.createResumeCommand(process.suspendManager.pausedContext)
 //    resumeThread.run()
-}
-
-internal fun jumpByFrameDrop(
-        process: DebugProcessImpl,
-        suspendContext: SuspendContextImpl)
-{
-    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
-    popFrameCommand.threadAction(suspendContext)
-
-    val stepInCommand = process.createStepIntoCommand(process.suspendManager.pausedContext, true, null)
-    stepInCommand.action()
 }
 
 internal fun jumpByRunToLine(

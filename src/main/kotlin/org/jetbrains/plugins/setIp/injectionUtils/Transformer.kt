@@ -6,7 +6,7 @@ internal const val firstStopCodeIndex = 5L
 internal const val jumpSwitchVariableName = "\$SETIP\$"
 
 internal class Transformer(
-        private val targetLineInfo: LocalVariableAnalyzeResult,
+        private val targetLineInfo: JumpLineAnalyzeResult,
         private val methodName: MethodName,
         private val argumentsCount: Int,
         visitor: ClassVisitor

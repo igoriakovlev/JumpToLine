@@ -35,12 +35,13 @@ private fun instrument(project: Project) {
     val file = Files.readAllBytes(File("C:\\AAA\\KtUltraLightClass.class").toPath())
     val methodName = MethodName("ownMethods", "()Ljava/util/List;", null)
 
-    val result = getAvailableGotoLines(
+    val result = getAvailableJumpLines(
             ownerTypeName = "org/jetbrains/kotlin/asJava/classes/KtUltraLightClass",
             targetMethod = methodName,
             lineTranslator = null,
             klass = file,
-            jumpFromLine = 0
+            jumpFromLine = 0,
+            analyzeFirstLine = false
     )
 
     val line = result?.firstOrNull { it.sourceLine == 270 } ?: return
@@ -58,3 +59,5 @@ private fun instrument(project: Project) {
         dumpClass(file, classToRedefine)
     }
 }
+
+internal inline fun <T> Boolean.onTrue(body: () -> T): T? = if (this) body() else null

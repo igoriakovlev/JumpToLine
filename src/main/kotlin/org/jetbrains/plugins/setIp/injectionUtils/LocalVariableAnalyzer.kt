@@ -11,14 +11,13 @@ internal open class LocalSemiDescriptor(val index: Int, val asmType: Type)
 internal class LocalDescriptor(index: Int, asmType: Type, val saveRestoreStatus: LocalVariableAnalyzer.SaveRestoreStatus) : LocalSemiDescriptor(index, asmType)
 internal data class UserVisibleLocal(val name: String, val descriptor: String, val signature: String?, val start: Label, val end: Label, val index: Int)
 
-internal data class LocalVariableAnalyzeResult(
+internal data class JumpLineAnalyzeResult(
         val javaLine: Int,
         val sourceLine: Int,
         val locals: List<LocalDescriptor>,
         val localsFrame: LocalsFrame,
         val fistLocalsFrame: LocalsFrame,
         val isSafeLine: Boolean,
-        val isFirstLine: Boolean,
         val methodLocalsCount: Int,
         val instantFrame: Boolean,
         val frameOnFirstInstruction: Boolean
@@ -34,11 +33,8 @@ internal class LocalVariableAnalyzer private constructor(
     private data class SemiResult(
             val locals: List<LocalSemiDescriptor>,
             val localsFrame: LocalsFrame,
-            val isFirstLine: Boolean,
             val instructionIndex: Long
     )
-
-    private var isFirstLine = true
 
     private val instructionCountOnFrames = mutableSetOf<Long>()
 
@@ -123,7 +119,7 @@ internal class LocalVariableAnalyzer private constructor(
         return false
     }
 
-    private val analyzeResult: List<LocalVariableAnalyzeResult>? get() {
+    private val analyzeResult: List<JumpLineAnalyzeResult>? get() {
 
         val methodLocalsCount = semiResult.maxBy { it.value.locals.size }?.value?.locals?.size ?: 0
 
@@ -147,14 +143,13 @@ internal class LocalVariableAnalyzer private constructor(
 
             val isInstantFrame = instructionCountOnFrames.contains(it.value.instructionIndex)
 
-            LocalVariableAnalyzeResult(
+            JumpLineAnalyzeResult(
                     javaLine = it.key,
                     sourceLine = sourceLine,
                     locals = localsDescriptors,
                     fistLocalsFrame = firstLocalsFrame,
                     localsFrame = it.value.localsFrame,
                     isSafeLine = isSafe,
-                    isFirstLine = it.value.isFirstLine,
                     methodLocalsCount = methodLocalsCount,
                     instantFrame = isInstantFrame,
                     frameOnFirstInstruction = instructionCountOnFrames.contains(0)
@@ -273,8 +268,6 @@ internal class LocalVariableAnalyzer private constructor(
 
         super.visitFrame(type, numLocal, local, numStack, stack)
 
-        //createIndexesForCurrentPosition(numLocal)
-
         instructionCountOnFrames.add(instructionIndex)
 
         if (local === null) return
@@ -299,8 +292,7 @@ internal class LocalVariableAnalyzer private constructor(
         }
 
         linesExpectedFromFrame.forEach {
-            semiResult[it] = SemiResult(resultBuilder, localsFrame, isFirstLine, instructionIndex)
-            isFirstLine = false
+            semiResult[it] = SemiResult(resultBuilder, localsFrame, instructionIndex)
         }
 
         linesExpectedFromFrame.clear()
@@ -309,8 +301,6 @@ internal class LocalVariableAnalyzer private constructor(
     override fun visitLineNumber(line: Int, start: Label) {
 
         super.visitLineNumber(line, start)
-        val actuallyFirstLine = isFirstLine
-        isFirstLine = false
 
         if (sourceLineIndex == null && line == jumpFromLine) {
             sourceLineIndex = instructionIndex
@@ -334,7 +324,7 @@ internal class LocalVariableAnalyzer private constructor(
             val result = locals.mapIndexedNotNull { index, type ->
                 type.convertToType()?.let { LocalSemiDescriptor(index, it) }
             }
-            semiResult[line] = SemiResult(result, localsFrame, actuallyFirstLine, instructionIndex)
+            semiResult[line] = SemiResult(result, localsFrame, instructionIndex)
         } else {
             linesExpectedFromFrame.add(line)
         }
@@ -348,7 +338,7 @@ internal class LocalVariableAnalyzer private constructor(
                 lineTranslator: LineTranslator?,
                 lineFilterSet: Set<Int>,
                 jumpFromLine: Int
-        ): List<LocalVariableAnalyzeResult>? {
+        ): List<JumpLineAnalyzeResult>? {
 
             val methodVisitor = LocalVariableAnalyzer(ownerTypeName, lineTranslator, lineFilterSet, jumpFromLine)
 

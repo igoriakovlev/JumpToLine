@@ -13,7 +13,6 @@ import org.jetbrains.plugins.setIp.LineTranslator
 import org.jetbrains.plugins.setIp.TypeResolveError
 import org.objectweb.asm.*
 import org.objectweb.asm.ClassReader.EXPAND_FRAMES
-import org.objectweb.asm.ClassReader.SKIP_FRAMES
 
 
 internal abstract class MethodVisitor7(visitor: MethodVisitor? = null) : MethodVisitor(Opcodes.ASM7, visitor)
@@ -47,18 +46,19 @@ internal fun DebugProcessImpl.resumeBreakpoints() {
     StackCapturingLineBreakpoint.createAll(this)
 }
 
-internal fun getAvailableGotoLines(
+internal fun getAvailableJumpLines(
         ownerTypeName: String,
         targetMethod: MethodName,
         lineTranslator: LineTranslator?,
         klass: ByteArray,
-        jumpFromLine: Int
-): List<LocalVariableAnalyzeResult>? {
+        jumpFromLine: Int,
+        analyzeFirstLine: Boolean
+): List<JumpLineAnalyzeResult>? {
 
     val classReader = ClassReader(klass)
 
     val stackAnalyzerResult =
-            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator)
+            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator, analyzeFirstLine)
                     ?: return null
 
     return LocalVariableAnalyzer.analyze(
@@ -89,7 +89,7 @@ internal class ClassWriterWithTypeResolver(
 }
 
 internal fun updateClassWithGotoLinePrefix(
-        targetLineInfo: LocalVariableAnalyzeResult,
+        targetLineInfo: JumpLineAnalyzeResult,
         targetMethod: MethodName,
         argumentsCount: Int,
         klass: ByteArray,
@@ -103,10 +103,6 @@ internal fun updateClassWithGotoLinePrefix(
             flags = ClassWriter.COMPUTE_MAXS
     )
 
-//    val stringWriter = StringWriter()
-//    val printWriter = PrintWriter(stringWriter)
-//    CheckClassAdapter()
-
     val transformer = Transformer(
             targetLineInfo = targetLineInfo,
             methodName = targetMethod,
@@ -116,8 +112,6 @@ internal fun updateClassWithGotoLinePrefix(
 
     try {
         classReaderToWrite.accept(transformer, EXPAND_FRAMES)
-//        val errors = printWriter.toString()
-//        if (errors.isNotBlank()) return nullWithLog(errors)
     } catch(e: TypeResolveError) {
         return null
     }
