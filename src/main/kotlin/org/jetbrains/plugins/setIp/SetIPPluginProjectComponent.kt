@@ -7,7 +7,6 @@ package org.jetbrains.plugins.setIp
 
 import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.StartupActivity
 import com.intellij.xdebugger.impl.XDebugSessionImpl

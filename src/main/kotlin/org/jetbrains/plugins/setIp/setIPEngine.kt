@@ -181,7 +181,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
         return JumpLinesInfo(listOf(firstLineAnalyze), classFile = null, linesToGoto = linesToGoto)
     }
 
-    val classFile = process.tryGetTypeByteCode(threadProxy.threadReference, classType) ?: run {
+    val classFile = tryGetTypeByteCode(threadProxy.threadReference, classType) ?: run {
         unitWithLog("Cannot get class file for ${classType.name()}")
         return ClassNotFoundErrorResult
     }

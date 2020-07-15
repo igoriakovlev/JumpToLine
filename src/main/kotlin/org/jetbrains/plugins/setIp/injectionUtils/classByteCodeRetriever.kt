@@ -1,6 +1,5 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
-import com.intellij.debugger.engine.DebugProcessImpl
 import com.sun.jdi.*
 import com.sun.jdi.ObjectReference.INVOKE_SINGLE_THREADED
 import java.util.*
@@ -23,17 +22,13 @@ private fun ThreadReference.invokeStatic(
         parameters: List<Value>
 ) = klass.invokeMethod(this, klass.concreteMethodByName(name, signature), parameters, INVOKE_SINGLE_THREADED)
 
-internal fun DebugProcessImpl.tryGetTypeByteCode(
+internal fun tryGetTypeByteCode(
         threadReference: ThreadReference,
         targetType: ClassType
 ): ByteArray? = methodByteCodeCache.getOrPut(targetType) {
-    suspendBreakpoints()
     try {
         threadReference.tryGetTypeByteCodeImpl(targetType)
     } catch (e: Exception) { null }
-    finally {
-        resumeBreakpoints()
-    }
 }
 
 
@@ -56,18 +51,17 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
         loadedClass.reflectedType() as? ClassType
     }
 
-
     // java.lang.reflect.Array
-    val arrayType = getClassForName("java.lang.reflect.Array") ?: return null
+    val arrayType = getClassForName("java.lang.reflect.Array") ?: return nullWithLog("getClassForName(java.lang.reflect.Array)!")
     //java.lang.InputStream
-    val inputStreamType = getClassForName("java.io.InputStream") ?: return null
+    val inputStreamType = getClassForName("java.io.InputStream") ?: return nullWithLog("getClassForName(java.io.InputStream)!")
     // byte
-    val byteClass = getClassForName("java.lang.Byte") ?: return null
+    val byteClass = getClassForName("java.lang.Byte") ?: return nullWithLog("getClassForName(java.lang.Byte)!")
     val byteType = run {
         val typeField = byteClass.fieldByName("TYPE")
         val typeFieldValue = byteClass.getValue(typeField) as? ClassObjectReference
         typeFieldValue?.reflectedType() as? ClassType
-    } ?: return null
+    } ?: return nullWithLog("byteType!")
 
     fun createArray(baseType: ClassType, length: Int)= invokeStatic(
                 klass = arrayType,
@@ -85,7 +79,7 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
             name = "getResourceAsStream",
             signature = "(Ljava/lang/String;)Ljava/io/InputStream;",
             parameters = listOf(virtualMachine.mirrorOf(className))
-    ) as? ObjectReference ?: return null
+    ) as? ObjectReference ?: return nullWithLog("getResourceAsStream!")
 
     val available = invokeInstance(
             obj = inputStream,
@@ -93,23 +87,32 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
             name = "available",
             signature = "()I",
             parameters = emptyList()
-    ) as? IntegerValue ?: return null
+    ) as? IntegerValue ?: return nullWithLog("available!")
 
     val arraySize = available.value()
 
-    val array = createArray(byteType, arraySize) ?: return null
+    val array = createArray(byteType, arraySize) ?: return nullWithLog("createArray(byteType, arraySize)!")
 
-    val read = invokeInstance(
-            obj = inputStream,
-            klass = inputStreamType,
-            name = "read",
-            signature = "([BII)I",
-            parameters = listOf(array, virtualMachine.mirrorOf(0), available)
-    ) as? IntegerValue ?: return null
+    var readed = 0
+    while(readed < arraySize) {
 
-    if (arraySize != read.value()) return null
+        val currentReaded = invokeInstance(
+                obj = inputStream,
+                klass = inputStreamType,
+                name = "read",
+                signature = "([BII)I",
+                parameters = listOf(array, virtualMachine.mirrorOf(readed), virtualMachine.mirrorOf(arraySize - readed))
+        ) as? IntegerValue ?: return nullWithLog("read returned invalid result type")
+
+        val currentReadedValue = currentReaded.value()
+
+        if (currentReadedValue < 1) break
+
+        readed += currentReadedValue
+    }
+
+    if (arraySize != readed) return nullWithLog("arraySize != read.value()! with arraySize=$arraySize, read.value()=$readed")
 
     //maybe we should call available one again to check it is empty
-
     return array.values.map { (it as ByteValue).value() }.toByteArray()
 }
