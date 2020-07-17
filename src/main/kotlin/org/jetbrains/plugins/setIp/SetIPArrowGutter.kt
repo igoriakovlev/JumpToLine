@@ -97,6 +97,7 @@ internal class SetIPArrowGutter(
 
     companion object {
         private val DefaultCursor = Cursor(Cursor.DEFAULT_CURSOR)
+        private val WaitCursor = Cursor(Cursor.WAIT_CURSOR)
         private val smartStepInto =
                 EditorColorsManager.getInstance().globalScheme.getAttributes(DebuggerColors.SMART_STEP_INTO_TARGET)
         private val greenColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(30,40, 0) else Color(199,225, 94)
@@ -208,7 +209,7 @@ internal class SetIPArrowGutter(
     override fun getCursor(line: Int, actionId: Int): Cursor {
         if (actionId != 1 && actionId != 2) return DefaultCursor
         updateHighlighters(actionId == 1)
-        return DefaultCursor
+        return if (highlighters == null) WaitCursor else DefaultCursor
     }
 
     private fun localAnalysisByRenderLine(line: Int) =
