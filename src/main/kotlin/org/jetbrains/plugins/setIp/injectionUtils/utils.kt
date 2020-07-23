@@ -1,19 +1,46 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import org.jetbrains.plugins.setIp.CommonTypeResolver
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
+import java.util.concurrent.Semaphore
 
 private val logger = Logger.getInstance("SetIP Plugin")
+
+internal class ReturnLikeException : Exception()
+
+inline fun finishOnException(onFinish: () -> Unit, body: () -> Unit) {
+    var wasException = false
+    try {
+        body()
+    } catch (e: Exception) {
+        wasException = true
+        if (e !is ReturnLikeException) throw e
+    } finally {
+        if (wasException) onFinish()
+    }
+}
 
 internal fun <T> nullWithLog(message: String): T?
         = null.apply { logger.warn(message) }
 
 internal fun unitWithLog(message: String): Unit
         = logger.warn(message)
+
+internal fun returnByExceptionWithLog(message: String): Nothing {
+    logger.warn(message)
+    throw ReturnLikeException()
+}
+
+internal fun returnByExceptionNoLog(): Nothing {
+    throw ReturnLikeException()
+}
 
 internal fun Throwable.logException(): Unit
         = logger.error(this)
@@ -61,3 +88,24 @@ private fun instrument(project: Project) {
 }
 
 internal inline fun <T> Boolean.onTrue(body: () -> T): T? = if (this) body() else null
+
+internal fun Project.runSynchronouslyWithProgress(progressTitle: String, action: (() -> Unit) -> Unit) {
+    ProgressManager.getInstance().run(object: Task.Modal(this, progressTitle, false) {
+        override fun run(indicator: ProgressIndicator) {
+            val semaphore = Semaphore(0)
+            val release = { semaphore.release() }
+            action(release)
+            semaphore.acquire()
+        }
+    })
+}
+
+internal fun <T : Any> Project.runSynchronouslyWithProgress(progressTitle: String, canBeCanceled: Boolean, action: () -> T): T? {
+    var result: T? = null
+    ProgressManager.getInstance().run(object: Task.Modal(this, progressTitle, canBeCanceled) {
+        override fun run(indicator: ProgressIndicator) {
+            result = action()
+        }
+    })
+    return result
+}

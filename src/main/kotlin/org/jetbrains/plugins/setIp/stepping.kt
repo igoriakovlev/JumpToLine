@@ -30,7 +30,8 @@ internal fun debuggerJump(
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver,
         process: DebugProcessImpl,
-        suspendContext: SuspendContextImpl
+        suspendContext: SuspendContextImpl,
+        onFinish: () -> Unit
 ) {
     fun currentFrame() = threadProxy.frame(0)
 
@@ -47,7 +48,7 @@ internal fun debuggerJump(
             argumentsCount = argumentsCount,
             klass = originalClassFile,
             commonTypeResolver = commonTypeResolver
-    ) ?: return unitWithLog("Failed to redefine class")
+    ) ?: returnByExceptionWithLog("Failed to redefine class")
 
     dumpClass(originalClassFile, classToRedefine)
 
@@ -78,7 +79,7 @@ internal fun debuggerJump(
             val slotValues = jbJDIStack.getSlotsValues(localsToSafeAndRestore)
             localVariablesByIJ = localsToSafeAndRestore.zip(slotValues)
         } catch (e: Exception) {
-            return unitWithLog("Exception getting values by slots: $e")
+            returnByExceptionWithLog("Exception getting values by slots: $e")
         }
 
     } else {
@@ -99,14 +100,14 @@ internal fun debuggerJump(
     process.onHotSwapFinished()
 
     val newMethod = declaredType.concreteMethodByName(methodName.name, methodName.signature)
-            ?: return unitWithLog("Cannot find refurbished method with given name and signature")
+            ?: returnByExceptionWithLog("Cannot find refurbished method with given name and signature")
 
     val stopPreloadLocation = newMethod.locationOfCodeIndex(firstStopCodeIndex)
-            ?: return unitWithLog("Cannot find first stop location")
+            ?: returnByExceptionWithLog("Cannot find first stop location")
 
     val targetLocation = newMethod.locationsOfLine(targetLineInfo.javaLine)
             .minBy { it.codeIndex() }
-            ?: return unitWithLog("Cannot find target location")
+            ?: returnByExceptionWithLog("Cannot find target location")
 
     fun StackFrame.trySetValue(description: VariableDescription, value: Value) {
         val variable = visibleVariableByName(description.name) ?: return
@@ -114,7 +115,8 @@ internal fun debuggerJump(
         setValue(variable, value)
         return
     }
-    InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false) {
+
+    InstrumentationMethodBreakpoint(process, threadProxy, stopPreloadLocation, stopAfterAction = false, onFinish = onFinish) {
 
         fun resumeBreakpointsAndThrow(message: String): Nothing {
             process.resumeBreakpoints()
@@ -131,7 +133,7 @@ internal fun debuggerJump(
         stackSwitchFrame.setValue(jumpVariable, machine.mirrorOf(1))
         //resumeBreakpointsAndThrow("Failed to set SETIP variable")
 
-        InstrumentationMethodBreakpoint(process, threadProxy, targetLocation, stopAfterAction = true) {
+        InstrumentationMethodBreakpoint(process, threadProxy, targetLocation, stopAfterAction = true, onFinish = onFinish) {
 
             val stackTargetFrame = threadProxy.forceFramesAndGetFirst()
 
@@ -151,6 +153,7 @@ internal fun debuggerJump(
             }
 
             process.resumeBreakpoints()
+            onFinish()
         }
     }
 
@@ -165,14 +168,15 @@ internal fun jumpByRunToLine(
         process: DebugProcessImpl,
         suspendContext: SuspendContextImpl,
         threadProxy: ThreadReferenceProxyImpl,
-        line: Int)
+        line: Int,
+        onFinish: () -> Unit)
 {
     fun currentFrame() = threadProxy.frame(0)
     val method = currentFrame().location().method()
 
     val runToLocation = method.locationsOfLine(line)
             ?.minBy { it.codeIndex() }
-            ?: return unitWithLog("Cannot find line location for RunTo")
+            ?: returnByExceptionWithLog("Cannot find line location for RunTo")
 
     val codeLocation = currentFrame().location()
 
@@ -188,6 +192,6 @@ internal fun jumpByRunToLine(
             filterThread = threadProxy.threadReference
         })
     }
-
     process.suspendManager.resume(process.suspendManager.pausedContext)
+    onFinish()
 }

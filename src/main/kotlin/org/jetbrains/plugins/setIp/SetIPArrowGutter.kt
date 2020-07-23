@@ -20,11 +20,12 @@ import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.setIp.injectionUtils.onTrue
-import org.w3c.dom.ranges.Range
+import org.jetbrains.plugins.setIp.injectionUtils.runSynchronouslyWithProgress
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
+import java.util.concurrent.Semaphore
 
 internal class SetIPArrowGutter(
         private val project: Project,
@@ -60,20 +61,25 @@ internal class SetIPArrowGutter(
 
         reSetterByMouseLeave.remove()
         resetHighlighters()
-
         if (line == currentLine) return false
 
-        val jumpInfo = currentJumpInfo ?: return false
+        val jumpInfo = currentJumpResult as? JumpLinesInfo ?: return false
+
+        val goingToSelectedLine = "Going to selected line..."
 
         if (actionId == 1) {
             val gotoLine = jumpInfo.linesToGoto.firstOrNull { it.sourceLine - 1 == line } ?: return false
-            tryJumpToByGoto(session, gotoLine.javaLine)
+            project.runSynchronouslyWithProgress(goingToSelectedLine) { onFinish ->
+                tryJumpToByGoto(session, gotoLine.javaLine, onFinish)
+            }
             return false
         }
 
         val firstLine = jumpInfo.firstLine
         if (firstLine != null && line == firstLine.sourceLine - 1) {
-            tryJumpToByGoto(session, firstLine.javaLine)
+            project.runSynchronouslyWithProgress(goingToSelectedLine) { onFinish ->
+                tryJumpToByGoto(session, firstLine.javaLine, onFinish)
+            }
             return false
         }
 
@@ -85,12 +91,15 @@ internal class SetIPArrowGutter(
             if (dialog.exitCode == 1) return false
         }
 
-        tryJumpToSelectedLine(
-                session = session,
-                targetLineInfo = selected,
-                classFile = jumpInfo.classFile,
-                commonTypeResolver = commonTypeResolver
-        )
+        project.runSynchronouslyWithProgress("Jumping to selected line...") { onFinish ->
+            tryJumpToSelectedLine(
+                    session = session,
+                    targetLineInfo = selected,
+                    classFile = jumpInfo.classFile,
+                    commonTypeResolver = commonTypeResolver,
+                    onFinish = onFinish
+            )
+        }
 
         return true
     }
@@ -108,63 +117,87 @@ internal class SetIPArrowGutter(
 
     private fun resetHighlighters() {
 
-        val currentHighlighters = highlighters ?: return
-        highlighters = null
+        if (highlighters == null) return
 
-        val application = ApplicationManager.getApplication()
-        application.invokeLater {
-            application.runWriteAction {
-                currentHighlighters.forEach {
-                    markupModel?.removeHighlighter(it)
+        synchronized(session) {
+            val currentHighlighters = highlighters ?: return
+            highlighters = null
+
+            val application = ApplicationManager.getApplication()
+            application.invokeLater {
+                application.runWriteAction {
+                    currentHighlighters.forEach {
+                        markupModel?.removeHighlighter(it)
+                    }
                 }
             }
         }
     }
 
+    private fun updateHighlightersForJump(currentJumpInfo: JumpLinesInfo,
+                                          markupModel: MarkupModel,
+                                          lineCount: Int): List<RangeHighlighter>? {
+
+        val linesToJump = currentJumpInfo.linesToJump ?: return null
+        val firstLine = currentJumpInfo.firstLine
+        if (linesToJump.none()) return null
+
+        val jumpHighlighters = mutableListOf<RangeHighlighter>()
+
+        linesToJump.forEach { lineToJump ->
+            val lineToSet = lineToJump.sourceLine - 1
+            (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
+                val attributes = if (lineToJump.isSafeLine) safeLineAttribute else unsageLineAttribute
+                val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
+                jumpHighlighters.add(highlighter)
+            }
+        }
+
+        if (firstLine != null) {
+            val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+            jumpHighlighters.add(firstLineHighlighter)
+        }
+
+        return jumpHighlighters
+    }
+
+    private fun updateHighlightersForGoTo(currentJumpInfo: JumpLinesInfo,
+                                          markupModel: MarkupModel,
+                                          lineCount: Int): List<RangeHighlighter>? {
+        return currentJumpInfo.linesToGoto.mapNotNull { line ->
+            val lineToSet = line.sourceLine - 1
+            if (lineToSet <= lineCount && lineToSet != currentLine) {
+                markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+            } else null
+        }
+    }
+
     private fun updateHighlighters(highlightGoTo: Boolean) {
         if (highlighters != null && highlightGoTo == highlightersIsForGoto) return
+        if (inProgress) return
 
         highlightersIsForGoto = highlightGoTo
         resetHighlighters()
 
-        val lineCount = document?.lineCount
-        val markupModel = markupModel
-        if (markupModel != null && lineCount != null) {
-            if (!highlightersIsForGoto) {
+        val lineCount = document?.lineCount ?: return
+        val markupModel = markupModel ?: return
 
-                val linesToJump = currentJumpInfo?.linesToJump
-                val firstLine = currentJumpInfo?.firstLine
+        val currentJumpResult = currentJumpResult
+        if (currentJumpResult == null) {
+            loadJumpResult()
+            return
+        }
 
-                if ((linesToJump?.any() == true) || firstLine != null) {
+        val currentJumpInfo = currentJumpResult as? JumpLinesInfo ?: return
 
-                    val jumpHighlighters = mutableListOf<RangeHighlighter>()
+        synchronized(session) {
+            if (highlighters != null) return
+            highlighters = if (highlightersIsForGoto) updateHighlightersForGoTo(currentJumpInfo, markupModel, lineCount)
+            else updateHighlightersForJump(currentJumpInfo, markupModel, lineCount)
 
-                    linesToJump?.forEach { lineToJump ->
-                        val lineToSet = lineToJump.sourceLine - 1
-                        (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
-                            val attributes = if (lineToJump.isSafeLine) safeLineAttribute else unsageLineAttribute
-                            val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                            jumpHighlighters.add(highlighter)
-                        }
-                    }
-
-                    if (firstLine != null) {
-                        val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-                        jumpHighlighters.add(firstLineHighlighter)
-                    }
-
-                    highlighters = jumpHighlighters
-                }
-
-            } else {
-                highlighters = currentJumpInfo?.linesToGoto?.mapNotNull { line ->
-                    val lineToSet = line.sourceLine - 1
-                    if (lineToSet <= lineCount && lineToSet != currentLine) {
-                        markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-                    } else null
-                }
+            if (highlighters != null) {
+                reSetterByMouseLeave.install()
             }
-            reSetterByMouseLeave.install()
         }
     }
 
@@ -191,8 +224,8 @@ internal class SetIPArrowGutter(
         }
 
         fun remove() {
-            installedGutterComponent = null
             installedGutterComponent?.removeMouseListener(this)
+            installedGutterComponent = null
         }
 
         override fun mouseReleased(e: MouseEvent?) {}
@@ -200,6 +233,7 @@ internal class SetIPArrowGutter(
 
         override fun mouseExited(e: MouseEvent?) {
             resetHighlighters()
+            remove()
         }
 
         override fun mouseClicked(e: MouseEvent?) {}
@@ -213,23 +247,36 @@ internal class SetIPArrowGutter(
     }
 
     private fun localAnalysisByRenderLine(line: Int) =
-            currentJumpInfo?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
+            (currentJumpResult as? JumpLinesInfo)?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
 
     fun reset() {
         resetHighlighters()
-        currentJumpInfoCached = null
+        currentJumpResult = null
         markupModelCached = null
         documentCached = null
         reSetterByMouseLeave.remove()
     }
 
-    private var currentJumpInfoCached: GetLinesToJumpResult? = null
+    private var inProgress = false
 
-    private val currentJumpInfo: JumpLinesInfo? get() {
+    private var currentJumpResult: GetLinesToJumpResult? = null
+
+    private fun loadJumpResult() {
+        if (inProgress) return
+        if (currentJumpResult != null) return
+
         synchronized(session) {
-            if (currentJumpInfoCached != null) return currentJumpInfoCached as? JumpLinesInfo
-            currentJumpInfoCached = tryGetLinesToJump(session)
-            return currentJumpInfoCached as? JumpLinesInfo
+            if (inProgress) return
+            if (currentJumpResult != null) return
+            inProgress = true
+        }
+
+        project.runSynchronouslyWithProgress("Analyzing jump lines...", false) {
+            try {
+                currentJumpResult = tryGetLinesToJump(session)
+            } finally {
+                inProgress = false
+            }
         }
     }
 }

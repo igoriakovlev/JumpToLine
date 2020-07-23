@@ -8,12 +8,14 @@ import com.intellij.debugger.ui.breakpoints.SyntheticLineBreakpoint
 import com.intellij.openapi.editor.Document
 import com.sun.jdi.Location
 import com.sun.jdi.event.LocatableEvent
+import org.jetbrains.plugins.setIp.injectionUtils.finishOnException
 
 internal class InstrumentationMethodBreakpoint(
         private val process: DebugProcessImpl,
         private val thread: ThreadReferenceProxyImpl,
         private val location: Location,
         private val stopAfterAction: Boolean,
+        private val onFinish: () -> Unit,
         private val action: () -> Unit
 ) : SyntheticLineBreakpoint(process.project) {
 
@@ -31,8 +33,10 @@ internal class InstrumentationMethodBreakpoint(
     }
 
     override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent): Boolean {
-        process.requestsManager.deleteRequest(this)
-        action()
+        finishOnException(onFinish) {
+            process.requestsManager.deleteRequest(this)
+            action()
+        }
         return stopAfterAction
     }
 

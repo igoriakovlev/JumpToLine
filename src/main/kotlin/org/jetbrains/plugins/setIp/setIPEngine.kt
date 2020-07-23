@@ -125,7 +125,6 @@ private class StrataViaLocationTranslator(
 }
 
 private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResult? {
-
     val process = session.process
 
     if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
@@ -182,17 +181,21 @@ internal fun tryJumpToSelectedLine(
         session: DebuggerSession,
         targetLineInfo: JumpLineAnalyzeResult,
         classFile: ByteArray?,
-        commonTypeResolver: CommonTypeResolver
+        commonTypeResolver: CommonTypeResolver,
+        onFinish: () -> Unit
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-            tryJumpToSelectedLineImpl(
-                    session = session,
-                    classFile = classFile,
-                    targetLineInfo = targetLineInfo,
-                    commonTypeResolver = commonTypeResolver,
-                    suspendContext = suspendContext
-            )
+            finishOnException(onFinish) {
+                tryJumpToSelectedLineImpl(
+                        session = session,
+                        classFile = classFile,
+                        targetLineInfo = targetLineInfo,
+                        commonTypeResolver = commonTypeResolver,
+                        suspendContext = suspendContext,
+                        onFinish = onFinish
+                )
+            }
         }
     }
     session.process.managerThread.schedule(command)
@@ -200,15 +203,19 @@ internal fun tryJumpToSelectedLine(
 
 internal fun tryJumpToByGoto(
     session: DebuggerSession,
-    line: Int
+    line: Int,
+    onFinish: () -> Unit
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-            jumpByRunToLineImpl(
-                    session = session,
-                    suspendContext = suspendContext,
-                    line = line
-            )
+            finishOnException(onFinish) {
+                jumpByRunToLineImpl(
+                        session = session,
+                        suspendContext = suspendContext,
+                        line = line,
+                        onFinish = onFinish
+                )
+            }
         }
     }
     session.process.managerThread.schedule(command)
@@ -217,23 +224,27 @@ internal fun tryJumpToByGoto(
 private fun jumpByRunToLineImpl(
         session: DebuggerSession,
         suspendContext: SuspendContextImpl,
-        line: Int
+        line: Int,
+        onFinish: () -> Unit
 ) {
+
     val process = session.process
 
     val context = process.debuggerContext
-    val threadProxy = context.threadProxy ?: return unitWithLog("Cannot get threadProxy")
+    val threadProxy = context.threadProxy ?: returnByExceptionWithLog("Cannot get threadProxy")
 
-    if (!threadProxy.isSuspended) return unitWithLog("Calling jump on unsuspended thread")
+    if (!threadProxy.isSuspended) returnByExceptionWithLog("Calling jump on unsuspended thread")
 
-    if (threadProxy.frameCount() < 2) return unitWithLog("frameCount < 2")
+    if (threadProxy.frameCount() < 2) returnByExceptionWithLog("frameCount < 2")
 
     jumpByRunToLine(
-        process = process,
-        suspendContext = suspendContext,
-        threadProxy = threadProxy,
-        line = line
+            process = process,
+            suspendContext = suspendContext,
+            threadProxy = threadProxy,
+            line = line,
+            onFinish = onFinish
     )
+
 }
 
 private fun tryJumpToSelectedLineImpl(
@@ -241,26 +252,28 @@ private fun tryJumpToSelectedLineImpl(
         targetLineInfo: JumpLineAnalyzeResult,
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
-        suspendContext: SuspendContextImpl
+        suspendContext: SuspendContextImpl,
+        onFinish: () -> Unit
 ) {
     val process = session.process
 
     val context = process.debuggerContext
-    val threadProxy = context.threadProxy ?: return unitWithLog("Cannot get threadProxy")
+    val threadProxy = context.threadProxy ?: returnByExceptionWithLog("Cannot get threadProxy")
 
-    if (!threadProxy.isSuspended) return unitWithLog("Calling jump on unsuspended thread")
+    if (!threadProxy.isSuspended) returnByExceptionWithLog("Calling jump on unsuspended thread")
 
-    if (threadProxy.frameCount() < 2) return unitWithLog("frameCount < 2")
+    if (threadProxy.frameCount() < 2) returnByExceptionWithLog("frameCount < 2")
 
-    val frame = context.frameProxy ?: return unitWithLog("Cannot get frameProxy")
+    val frame = context.frameProxy ?: returnByExceptionWithLog("Cannot get frameProxy")
 
     val location = frame.location()
 
-    if (location.lineNumber("Java") == targetLineInfo.javaLine) return
+    if (location.lineNumber("Java") == targetLineInfo.javaLine) returnByExceptionNoLog()
 
-    val classType = location.declaringType() as? ClassType ?: return unitWithLog("Invalid location type")
+    val classType = location.declaringType() as? ClassType ?: returnByExceptionWithLog("Invalid location type")
 
-    val checkedClassFile = classFile ?: return unitWithLog("Cannot jump to not-first-line without class file")
+    val checkedClassFile = classFile ?: returnByExceptionWithLog("Cannot jump to not-first-line without class file")
+
     debuggerJump(
             targetLineInfo = targetLineInfo,
             declaredType = classType,
@@ -268,7 +281,8 @@ private fun tryJumpToSelectedLineImpl(
             threadProxy = threadProxy,
             commonTypeResolver = commonTypeResolver,
             process = process,
-            suspendContext = suspendContext
+            suspendContext = suspendContext,
+            onFinish = onFinish
     )
 }
 
