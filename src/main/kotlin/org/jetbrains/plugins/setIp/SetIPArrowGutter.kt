@@ -13,19 +13,22 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowId
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
+import org.jetbrains.plugins.setIp.injectionUtils.LineSafetyStatus
 import org.jetbrains.plugins.setIp.injectionUtils.onTrue
 import org.jetbrains.plugins.setIp.injectionUtils.runSynchronouslyWithProgress
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
-import java.util.concurrent.Semaphore
 
 internal class SetIPArrowGutter(
         private val project: Project,
@@ -85,10 +88,21 @@ internal class SetIPArrowGutter(
 
         val selected = localAnalysisByRenderLine(line) ?: return false
 
-        if (!selected.isSafeLine) {
-            val dialog = MessageDialog(project, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 1, null, true)
-            dialog.show()
-            if (dialog.exitCode == 1) return false
+
+        when (selected.safeStatus) {
+            LineSafetyStatus.NotSafe -> {
+                val dialog = MessageDialog(project, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 1, null, true)
+                dialog.show()
+                if (dialog.exitCode == 1) return false
+            }
+            LineSafetyStatus.UninitializedExist -> {
+                ToolWindowManager.getInstance(project).notifyByBalloon(
+                        ToolWindowId.DEBUG,
+                        MessageType.WARNING,
+                        "Some local variables were initialized to default values."
+                )
+            }
+            else -> {}
         }
 
         project.runSynchronouslyWithProgress("Jumping to selected line...") { onFinish ->
@@ -147,7 +161,7 @@ internal class SetIPArrowGutter(
         linesToJump.forEach { lineToJump ->
             val lineToSet = lineToJump.sourceLine - 1
             (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
-                val attributes = if (lineToJump.isSafeLine) safeLineAttribute else unsageLineAttribute
+                val attributes = if (lineToJump.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsageLineAttribute
                 val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
                 jumpHighlighters.add(highlighter)
             }

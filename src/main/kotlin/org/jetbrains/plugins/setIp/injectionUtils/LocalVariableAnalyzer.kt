@@ -11,13 +11,19 @@ internal open class LocalSemiDescriptor(val index: Int, val asmType: Type)
 internal class LocalDescriptor(index: Int, asmType: Type, val saveRestoreStatus: LocalVariableAnalyzer.SaveRestoreStatus) : LocalSemiDescriptor(index, asmType)
 internal data class UserVisibleLocal(val name: String, val descriptor: String, val signature: String?, val start: Label, val end: Label, val index: Int)
 
+internal enum class LineSafetyStatus {
+    Safe,
+    NotSafe,
+    UninitializedExist
+}
+
 internal data class JumpLineAnalyzeResult(
         val javaLine: Int,
         val sourceLine: Int,
         val locals: List<LocalDescriptor>,
         val localsFrame: LocalsFrame,
         val fistLocalsFrame: LocalsFrame,
-        val isSafeLine: Boolean,
+        val safeStatus: LineSafetyStatus,
         val methodLocalsCount: Int,
         val instantFrame: Boolean,
         val frameOnFirstInstruction: Boolean
@@ -135,7 +141,13 @@ internal class LocalVariableAnalyzer private constructor(
                 local.saveRestoreStatus != SaveRestoreStatus.None || !isLocalAccessible(local.index, it.value.instructionIndex)
             }
 
-            val isSafe = allVariablesIsSafe //&& !duplicatedLines.contains(it.key)
+            val allVariablesSavedAndRestored = allVariablesIsSafe && localsDescriptors.all {
+                local -> local.saveRestoreStatus == SaveRestoreStatus.CanBeSavedAndRestored || local.saveRestoreStatus == SaveRestoreStatus.IsParameter
+            }
+
+            val safeStatus = if (allVariablesIsSafe) {
+                if (allVariablesSavedAndRestored) LineSafetyStatus.Safe else LineSafetyStatus.UninitializedExist
+            } else LineSafetyStatus.NotSafe
 
             //Translate line and skip it if translation is failed
             val sourceLine = if (lineTranslator !== null) lineTranslator.translate(it.key) else it.key
@@ -149,7 +161,7 @@ internal class LocalVariableAnalyzer private constructor(
                     locals = localsDescriptors,
                     fistLocalsFrame = firstLocalsFrame,
                     localsFrame = it.value.localsFrame,
-                    isSafeLine = isSafe,
+                    safeStatus = safeStatus,
                     methodLocalsCount = methodLocalsCount,
                     instantFrame = isInstantFrame,
                     frameOnFirstInstruction = instructionCountOnFrames.contains(0)
