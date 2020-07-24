@@ -10,6 +10,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 private val logger = Logger.getInstance("SetIP Plugin")
 
@@ -95,7 +97,9 @@ internal fun Project.runSynchronouslyWithProgress(progressTitle: String, action:
             val semaphore = Semaphore(0)
             val release = { semaphore.release() }
             action(release)
-            semaphore.acquire()
+            if (!semaphore.tryAcquire(15, TimeUnit.SECONDS)) {
+                throw TimeoutException("SetIP timeout on $progressTitle")
+            }
         }
     })
 }
