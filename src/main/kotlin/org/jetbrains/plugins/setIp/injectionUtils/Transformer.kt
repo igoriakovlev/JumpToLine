@@ -2,7 +2,6 @@ package org.jetbrains.plugins.setIp.injectionUtils
 
 import org.objectweb.asm.*
 
-internal const val firstStopCodeIndex = 5L
 internal const val jumpSwitchVariableName = "\$SETIP\$"
 
 internal class Transformer(
@@ -16,8 +15,13 @@ internal class Transformer(
     private var methodVisitedTwice = false
     private var lineVisited = false
 
+    var jumpTargetBytecodeOffset: Long = -1
+        private set
+    var jumpSwitchBytecodeOffset: Long = -1
+        private set
+
     val transformationSuccess get() =
-        methodVisited && lineVisited && !methodVisitedTwice
+        methodVisited && lineVisited && !methodVisitedTwice && jumpTargetBytecodeOffset >= 0 && jumpSwitchBytecodeOffset >= 0
 
     private inner class MethodTransformer(visitor: MethodVisitor) : MethodVisitorWithCounter(visitor) {
 
@@ -84,16 +88,10 @@ internal class Transformer(
 
             super.visitLdcInsn(0)
             super.visitVarInsn(Opcodes.ISTORE, extraVariable)
-            super.visitLabel(labelOnStart)
 
-            // THIS MAGIC NOP HAVE TO BE HERE
-            // There is four variants are possible: ldc and ldc_w either as istore_N or istore indexes
-            // We need to stop AFTER istore (index could be #2 or #3 or #4) BUT before/on iload (index could be #5 or #6 or #7)
-            // But ASM not giving us what index we should choose so the workaround is to choose index #5 with extra nop's.
-            // With this workaround we assume that index #5 [firstStopCodeIndex] points either on one of nop's or iload command, as required.
-            super.visitInsn(Opcodes.NOP)
-            super.visitInsn(Opcodes.NOP)
-            super.visitVarInsn(Opcodes.ILOAD, extraVariable) //STOP PLACE INDEX firstStopCodeIndex
+            super.visitLabel(labelOnStart)
+            jumpSwitchBytecodeOffset = labelOnStart.offset.toLong()
+            super.visitVarInsn(Opcodes.ILOAD, extraVariable)
 
             super.visitJumpInsn(Opcodes.IFEQ, labelOnFinish)
 
@@ -134,6 +132,7 @@ internal class Transformer(
                 if (!lineVisited) {
                     lineVisited = true
                     super.visitLabel(labelToMark)
+                    jumpTargetBytecodeOffset = labelToMark.offset.toLong()
                     if (!targetLineInfo.instantFrame) {
                         val localsFrame = targetLineInfo
                                 .localsFrame

@@ -18,14 +18,11 @@ private val logger = Logger.getInstance("SetIP Plugin")
 internal class ReturnLikeException : Exception()
 
 inline fun finishOnException(onFinish: () -> Unit, body: () -> Unit) {
-    var wasException = false
     try {
         body()
     } catch (e: Exception) {
-        wasException = true
+        onFinish()
         if (e !is ReturnLikeException) throw e
-    } finally {
-        if (wasException) onFinish()
     }
 }
 
@@ -85,7 +82,7 @@ private fun instrument(project: Project) {
     )
 
     if (classToRedefine !== null) {
-        dumpClass(file, classToRedefine)
+        dumpClass(file, classToRedefine.klass)
     }
 }
 

@@ -42,7 +42,7 @@ internal fun debuggerJump(
 
     val argumentsCount = arguments.size + if (!method.isStatic) 1 else 0
 
-    val classToRedefine = updateClassWithGotoLinePrefix(
+    val prefixUpdateResult = updateClassWithGotoLinePrefix(
             targetLineInfo = targetLineInfo,
             targetMethod = methodName,
             argumentsCount = argumentsCount,
@@ -50,7 +50,7 @@ internal fun debuggerJump(
             commonTypeResolver = commonTypeResolver
     ) ?: returnByExceptionWithLog("Failed to redefine class")
 
-    dumpClass(originalClassFile, classToRedefine)
+    dumpClass(originalClassFile, prefixUpdateResult.klass)
 
     val machine = threadProxy.virtualMachineProxy
 
@@ -89,24 +89,21 @@ internal fun debuggerJump(
                 .filter { it.second !== null }
     }
 
-    process.suspendBreakpoints()
-
     val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
     popFrameCommand.threadAction(suspendContext)
 
     jreSteppingBugPatch(machine.eventRequestManager(), threadProxy.threadReference)
 
-    machine.redefineClasses(mapOf(declaredType to classToRedefine))
+    machine.redefineClasses(mapOf(declaredType to prefixUpdateResult.klass))
     process.onHotSwapFinished()
 
     val newMethod = declaredType.concreteMethodByName(methodName.name, methodName.signature)
             ?: returnByExceptionWithLog("Cannot find refurbished method with given name and signature")
 
-    val stopPreloadLocation = newMethod.locationOfCodeIndex(firstStopCodeIndex)
+    val stopPreloadLocation = newMethod.locationOfCodeIndex(prefixUpdateResult.jumpSwitchBytecodeOffset)
             ?: returnByExceptionWithLog("Cannot find first stop location")
 
-    val targetLocation = newMethod.locationsOfLine(targetLineInfo.javaLine)
-            .minBy { it.codeIndex() }
+    val targetLocation = newMethod.locationOfCodeIndex(prefixUpdateResult.jumpTargetBytecodeOffset)
             ?: returnByExceptionWithLog("Cannot find target location")
 
     fun StackFrame.trySetValue(description: VariableDescription, value: Value) {

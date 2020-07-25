@@ -1,14 +1,15 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
+import org.jetbrains.plugins.setIp.LineTranslator
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Label
 import org.objectweb.asm.commons.AnalyzerAdapter
-import org.jetbrains.plugins.setIp.LineTranslator
 
 internal class StackEmptyLocatorAnalyzer private constructor(private val lineTranslator: LineTranslator?, private val addFirstLine: Boolean) : SingleMethodAnalyzer() {
 
     private val linesFound = mutableSetOf<Int>()
     private val linesVisited = mutableSetOf<Int>()
+    private val instructionsVisited = mutableSetOf<Long>()
 
     private var firstLineVisited = false
 
@@ -32,6 +33,7 @@ internal class StackEmptyLocatorAnalyzer private constructor(private val lineTra
 
         super.visitLineNumber(line, start)
 
+        if (!instructionsVisited.add(instructionIndex)) return
         if (!linesVisited.add(line)) return
         if (linesExpectedFromFrame.contains(line)) return
 

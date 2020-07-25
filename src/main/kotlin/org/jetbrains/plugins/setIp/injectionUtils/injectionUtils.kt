@@ -88,13 +88,19 @@ internal class ClassWriterWithTypeResolver(
     }
 }
 
+internal class UpdateClassWithGotoLinePrefixResult(
+        val klass: ByteArray,
+        val jumpSwitchBytecodeOffset: Long,
+        val jumpTargetBytecodeOffset: Long
+)
+
 internal fun updateClassWithGotoLinePrefix(
         targetLineInfo: JumpLineAnalyzeResult,
         targetMethod: MethodName,
         argumentsCount: Int,
         klass: ByteArray,
         commonTypeResolver: CommonTypeResolver
-): ByteArray? {
+): UpdateClassWithGotoLinePrefixResult? {
 
     val classReaderToWrite = ClassReader(klass)
     val writer = ClassWriterWithTypeResolver(
@@ -116,5 +122,11 @@ internal fun updateClassWithGotoLinePrefix(
         return null
     }
 
-    return if (transformer.transformationSuccess) writer.toByteArray() else null
+    return transformer.transformationSuccess.onTrue {
+        UpdateClassWithGotoLinePrefixResult(
+            klass = writer.toByteArray(),
+            jumpSwitchBytecodeOffset = transformer.jumpSwitchBytecodeOffset,
+            jumpTargetBytecodeOffset = transformer.jumpTargetBytecodeOffset
+        )
+    }
 }

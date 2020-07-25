@@ -1,9 +1,12 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.jetbrains.rd.util.getOrCreate
-import org.objectweb.asm.commons.AnalyzerAdapter
-import org.objectweb.asm.*
 import org.jetbrains.plugins.setIp.LineTranslator
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Label
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.Type
+import org.objectweb.asm.commons.AnalyzerAdapter
 
 internal typealias LocalsFrame = List<Any>
 
@@ -48,6 +51,7 @@ internal class LocalVariableAnalyzer private constructor(
 
     private val semiResult = mutableMapOf<Int, SemiResult>()
     private val visitedLines = mutableSetOf<Int>()
+    private val visitedInstructions = mutableSetOf<Long>()
     private val duplicatedLines = mutableSetOf<Int>()
     private val firstLocalsFrame = mutableListOf<Any>()
 
@@ -313,6 +317,8 @@ internal class LocalVariableAnalyzer private constructor(
     override fun visitLineNumber(line: Int, start: Label) {
 
         super.visitLineNumber(line, start)
+
+        if (!visitedInstructions.add(instructionIndex)) return
 
         if (sourceLineIndex == null && line == jumpFromLine) {
             sourceLineIndex = instructionIndex
