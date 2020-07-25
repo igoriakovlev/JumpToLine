@@ -1,5 +1,6 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
+import com.intellij.debugger.engine.DebugProcessImpl
 import com.sun.jdi.*
 import com.sun.jdi.ObjectReference.INVOKE_SINGLE_THREADED
 import java.util.*
@@ -23,12 +24,17 @@ private fun ThreadReference.invokeStatic(
 ) = klass.invokeMethod(this, klass.concreteMethodByName(name, signature), parameters, INVOKE_SINGLE_THREADED)
 
 internal fun tryGetTypeByteCode(
+        process: DebugProcessImpl,
         threadReference: ThreadReference,
         targetType: ClassType
 ): ByteArray? = methodByteCodeCache.getOrPut(targetType) {
+    process.suspendBreakpoints()
     try {
         threadReference.tryGetTypeByteCodeImpl(targetType)
     } catch (e: Exception) { null }
+    finally {
+        process.resumeBreakpoints()
+    }
 }
 
 

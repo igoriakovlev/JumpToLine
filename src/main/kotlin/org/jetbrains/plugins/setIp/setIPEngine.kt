@@ -157,7 +157,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             process.isEvaluationPossible
 
     val jumpLines: Pair<List<JumpLineAnalyzeResult>, ByteArray>? = jumpOnLineAvailable.onTrue {
-        val byteCode = tryGetTypeByteCode(threadProxy.threadReference, classType)
+        val byteCode = tryGetTypeByteCode(process, threadProxy.threadReference, classType)
                 ?: nullWithLog<ByteArray>("Cannot get class file for ${classType.name()}")
 
         byteCode?.let { klass ->
