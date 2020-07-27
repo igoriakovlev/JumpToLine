@@ -45,13 +45,18 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
 
     val virtualMachine = virtualMachine()
     val classTypeCacheValue = classTypeCache.getOrPut(virtualMachine) { mutableMapOf() }
+    
+    fun getClassForNameVMNoCache(className: String) =
+        virtualMachine.classesByName(className)?.let {
+            if (it.size != 0) it[0] as? ClassType else null
+        }
 
     // java.lang.Class
-    val classType = virtualMachine.classesByName("java.lang.Class")?.let {
-        if (it.size != 0) it[0] as? ClassType else null
-    } ?: return null
+    val classType = getClassForNameVMNoCache("java.lang.Class") ?:
+        return nullWithLog("java.lang.Class!")
 
     fun getClassForName(className: String): ClassType? = classTypeCacheValue.getOrPut(className) {
+        getClassForNameVMNoCache(className)?.let { return@getOrPut it }
         val forNameMethod = classType.concreteMethodByName("forName", "(Ljava/lang/String;)Ljava/lang/Class;")
         val loadedClass = classType.invokeMethod(this, forNameMethod, listOf(virtualMachine.mirrorOf(className)), INVOKE_SINGLE_THREADED) as ClassObjectReference
         loadedClass.reflectedType() as? ClassType
@@ -75,7 +80,6 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
                 signature = "(Ljava/lang/Class;I)Ljava/lang/Object;",
                 parameters = listOf(baseType.classObject(), virtualMachine.mirrorOf(length))
         ) as? ArrayReference
-
 
     //XXX.class.getResourceAsStream("XXX.class").read(new byte[SIZE], 0, SIZE)
     val className = targetType.name().takeLastWhile { it != '.' } + ".class"
