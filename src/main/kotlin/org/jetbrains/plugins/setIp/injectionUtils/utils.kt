@@ -20,7 +20,7 @@ internal class ReturnLikeException : Exception()
 inline fun finishOnException(onFinish: () -> Unit, body: () -> Unit) {
     try {
         body()
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
         onFinish()
         if (e !is ReturnLikeException) throw e
     }
