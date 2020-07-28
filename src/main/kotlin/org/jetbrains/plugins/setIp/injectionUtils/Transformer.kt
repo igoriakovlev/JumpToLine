@@ -5,7 +5,8 @@ import org.objectweb.asm.*
 internal const val jumpSwitchVariableName = "\$SETIP\$"
 
 internal class Transformer(
-        private val targetLineInfo: JumpLineAnalyzeResult,
+        private val jumpAnalyzeTarget: JumpAnalyzeTarget,
+        private val jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         private val methodName: MethodName,
         private val argumentsCount: Int,
         visitor: ClassVisitor
@@ -13,7 +14,7 @@ internal class Transformer(
 
     private var methodVisited = false
     private var methodVisitedTwice = false
-    private var lineVisited = false
+    private var alreadyInstrumented = false
 
     var jumpTargetBytecodeOffset: Long = -1
         private set
@@ -21,7 +22,7 @@ internal class Transformer(
         private set
 
     val transformationSuccess get() =
-        methodVisited && lineVisited && !methodVisitedTwice && jumpTargetBytecodeOffset >= 0 && jumpSwitchBytecodeOffset >= 0
+        methodVisited && alreadyInstrumented && !methodVisitedTwice && jumpTargetBytecodeOffset >= 0 && jumpSwitchBytecodeOffset >= 0
 
     private inner class MethodTransformer(visitor: MethodVisitor) : MethodVisitorWithCounter(visitor) {
 
@@ -56,7 +57,7 @@ internal class Transformer(
             }
 
         private fun emitNullifyLocals() {
-            for (localDescriptor in targetLineInfo.locals) {
+            for (localDescriptor in jumpAnalyzeTarget.locals) {
                 if (localDescriptor.index < argumentsCount) continue
 
                 if (localDescriptor.asmType.defaultValue === null) {
@@ -79,7 +80,7 @@ internal class Transformer(
 
         override fun visitCode() {
 
-            val extraVariable = targetLineInfo.methodLocalsCount
+            val extraVariable = jumpAnalyzeAdditionalInfo.methodLocalsCount
 
             val labelOnStart = Label()
             val labelOnFinish = Label()
@@ -98,8 +99,8 @@ internal class Transformer(
             emitNullifyLocals()
 
             super.visitJumpInsn(Opcodes.GOTO, labelToMark)
-            if (!targetLineInfo.frameOnFirstInstruction) {
-                val localsFrame = targetLineInfo.fistLocalsFrame.withSlashSpacedNames().toTypedArray()
+            if (!jumpAnalyzeAdditionalInfo.frameOnFirstInstruction) {
+                val localsFrame = jumpAnalyzeAdditionalInfo.fistLocalsFrame.withSlashSpacedNames().toTypedArray()
                 super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
             }
 
@@ -128,18 +129,17 @@ internal class Transformer(
         }
 
         override fun visitLineNumber(line: Int, start: Label?) {
-            if (targetLineInfo.javaLine == line) {
-                if (!lineVisited) {
-                    lineVisited = true
-                    super.visitLabel(labelToMark)
-                    jumpTargetBytecodeOffset = labelToMark.offset.toLong()
-                    if (!targetLineInfo.instantFrame) {
-                        val localsFrame = targetLineInfo
-                                .localsFrame
-                                .withSlashSpacedNames()
-                                .toTypedArray()
-                        super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
-                    }
+            val isTargetIndex = jumpAnalyzeTarget.jumpTargetInfo.instructionIndex == instructionIndex - codeStartIndex
+            if (!alreadyInstrumented && isTargetIndex) {
+                alreadyInstrumented = true
+                super.visitLabel(labelToMark)
+                jumpTargetBytecodeOffset = labelToMark.offset.toLong()
+                if (!jumpAnalyzeTarget.jumpTargetInfo.instantFrame) {
+                    val localsFrame = jumpAnalyzeTarget
+                            .localsFrame
+                            .withSlashSpacedNames()
+                            .toTypedArray()
+                    super.visitFrame(Opcodes.F_NEW, localsFrame.size, localsFrame, 0, null)
                 }
             }
             super.visitLineNumber(line, start)

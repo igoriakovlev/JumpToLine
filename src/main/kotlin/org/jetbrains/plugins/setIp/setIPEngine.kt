@@ -42,6 +42,7 @@ private const val NOT_SUSPENDED = "Debugger session is not suspended"
 private const val MAIN_FUNCTION_CALL = "SetIP is not available for main function call"
 private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top frames"
 private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
+private const val METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE = "Can not do jump for method without debug info or for native method"
 private const val AVAILABLE = "Grab to change execution position"
 private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"
 private const val UNKNOWN_ERROR0 = "Cant jump for unknown reason (#0)"
@@ -79,6 +80,8 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
     if (method.name() == "invokeSuspend" && method.signature() == "(Ljava/lang/Object;)Ljava/lang/Object;")
         return false to COROUTINE_SUSPECTED
 
+    if (method.location().lineNumber() == -1) return false to METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE
+
     return true to AVAILABLE
 }
 
@@ -98,11 +101,8 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
     } > 1
 }
 
-
-internal data class LineToGoTo(val javaLine: Int, val sourceLine: Int)
-
 internal sealed class GetLinesToJumpResult
-internal class JumpLinesInfo(val linesToJump: List<JumpLineAnalyzeResult>?, val classFile: ByteArray?, val linesToGoto: List<LineToGoTo>, val firstLine: LineToGoTo?) : GetLinesToJumpResult()
+internal class JumpLinesInfo(val jumpAnalyzeResult: JumpAnalyzeResult?, val classFile: ByteArray?, val linesToGoto: List<LineInfo>, val firstLine: LineInfo?) : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
 internal fun tryGetLinesToJump(session: DebuggerSession) =
@@ -140,6 +140,9 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
     val method = location.method()
     val classType = location.declaringType() as? ClassType ?: return nullWithLog("Invalid type to jump")
 
+    val jumpFromLine = location.lineNumber()
+    if (jumpFromLine == -1) return nullWithLog("Invalid line to jump -1")
+
     //create line translator for Kotlin if able
     val lineTranslator = classType.availableStrata()?.let {
         if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
@@ -148,7 +151,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
     val linesToGoto = method.allLineLocations()
             .map { it.lineNumber("Java") }
             .distinct()
-            .map { LineToGoTo(it, lineTranslator?.translate(it) ?: it ) }
+            .map { LineInfo(it, lineTranslator?.translate(it) ?: it ) }
 
     val firstLine = linesToGoto.minBy { it.javaLine }
 
@@ -156,7 +159,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             !checkIsTopMethodRecursive(location, threadProxy) &&
             process.isEvaluationPossible
 
-    val jumpLines: Pair<List<JumpLineAnalyzeResult>, ByteArray>? = jumpOnLineAvailable.onTrue {
+    val jumpTargets: Pair<JumpAnalyzeResult, ByteArray>? = jumpOnLineAvailable.onTrue {
         val byteCode = tryGetTypeByteCode(process, threadProxy.threadReference, classType)
                 ?: nullWithLog<ByteArray>("Cannot get class file for ${classType.name()}")
 
@@ -166,20 +169,21 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
                     targetMethod = method.methodName,
                     lineTranslator = lineTranslator,
                     klass = klass,
-                    jumpFromLine = location.lineNumber("Java"),
+                    jumpFromJavaLine = jumpFromLine,
                     analyzeFirstLine = false //We skip the first line because it is not need to analyze for jump
-            ) ?: nullWithLog<List<JumpLineAnalyzeResult>>("Cannot get available goto lines")
+            ) ?: nullWithLog<JumpAnalyzeResult>("Cannot get available goto lines")
 
             analyzeResult?.let { it to klass }
         }
     }
 
-    return JumpLinesInfo(jumpLines?.first, jumpLines?.second, linesToGoto, firstLine)
+    return JumpLinesInfo(jumpTargets?.first, jumpTargets?.second, linesToGoto, firstLine)
 }
 
 internal fun tryJumpToSelectedLine(
         session: DebuggerSession,
-        targetLineInfo: JumpLineAnalyzeResult,
+        jumpAnalyzeTarget: JumpAnalyzeTarget,
+        jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
         onFinish: () -> Unit
@@ -190,7 +194,8 @@ internal fun tryJumpToSelectedLine(
                 tryJumpToSelectedLineImpl(
                         session = session,
                         classFile = classFile,
-                        targetLineInfo = targetLineInfo,
+                        jumpAnalyzeTarget = jumpAnalyzeTarget,
+                        jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
                         commonTypeResolver = commonTypeResolver,
                         suspendContext = suspendContext,
                         onFinish = onFinish
@@ -249,7 +254,8 @@ private fun jumpByRunToLineImpl(
 
 private fun tryJumpToSelectedLineImpl(
         session: DebuggerSession,
-        targetLineInfo: JumpLineAnalyzeResult,
+        jumpAnalyzeTarget: JumpAnalyzeTarget,
+        jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
         suspendContext: SuspendContextImpl,
@@ -268,14 +274,13 @@ private fun tryJumpToSelectedLineImpl(
 
     val location = frame.location()
 
-    if (location.lineNumber("Java") == targetLineInfo.javaLine) returnByExceptionNoLog()
-
     val classType = location.declaringType() as? ClassType ?: returnByExceptionWithLog("Invalid location type")
 
     val checkedClassFile = classFile ?: returnByExceptionWithLog("Cannot jump to not-first-line without class file")
 
     debuggerJump(
-            targetLineInfo = targetLineInfo,
+            jumpAnalyzeTarget = jumpAnalyzeTarget,
+            jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
             declaredType = classType,
             originalClassFile = checkedClassFile,
             threadProxy = threadProxy,

@@ -51,23 +51,31 @@ internal fun getAvailableJumpLines(
         targetMethod: MethodName,
         lineTranslator: LineTranslator?,
         klass: ByteArray,
-        jumpFromLine: Int,
+        jumpFromJavaLine: Int,
         analyzeFirstLine: Boolean
-): List<JumpLineAnalyzeResult>? {
+): JumpAnalyzeResult? {
 
     val classReader = ClassReader(klass)
 
-    val stackAnalyzerResult =
-            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator, analyzeFirstLine)
-                    ?: return null
+    val linesAnalyzeResult = LinesAnalyzer.analyze(
+            classReader = classReader,
+            methodName = targetMethod,
+            ownerTypeName = ownerTypeName,
+            lineTranslator = lineTranslator,
+            jumpFromJavaLine = jumpFromJavaLine,
+            addFirstLine = analyzeFirstLine
+    ) ?: return null
+8
+
+//    val stackAnalyzerResult =
+//            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator, analyzeFirstLine)
+//                    ?: return null
 
     return LocalVariableAnalyzer.analyze(
             classReader = classReader,
             methodName = targetMethod,
             ownerTypeName = ownerTypeName,
-            lineTranslator = lineTranslator,
-            lineFilterSet = stackAnalyzerResult,
-            jumpFromLine = jumpFromLine
+            linesAnalyzerResult = linesAnalyzeResult
     )
 }
 
@@ -95,7 +103,8 @@ internal class UpdateClassWithGotoLinePrefixResult(
 )
 
 internal fun updateClassWithGotoLinePrefix(
-        targetLineInfo: JumpLineAnalyzeResult,
+        jumpAnalyzeTarget: JumpAnalyzeTarget,
+        jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         targetMethod: MethodName,
         argumentsCount: Int,
         klass: ByteArray,
@@ -110,7 +119,8 @@ internal fun updateClassWithGotoLinePrefix(
     )
 
     val transformer = Transformer(
-            targetLineInfo = targetLineInfo,
+            jumpAnalyzeTarget = jumpAnalyzeTarget,
+            jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
             methodName = targetMethod,
             argumentsCount = argumentsCount,
             visitor = writer

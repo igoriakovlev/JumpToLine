@@ -24,7 +24,8 @@ private fun jreSteppingBugPatch(eventRequestManager: EventRequestManager, thread
 }
 
 internal fun debuggerJump(
-        targetLineInfo: JumpLineAnalyzeResult,
+        jumpAnalyzeTarget: JumpAnalyzeTarget,
+        jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         declaredType: ClassType,
         originalClassFile: ByteArray,
         threadProxy: ThreadReferenceProxyImpl,
@@ -43,7 +44,8 @@ internal fun debuggerJump(
     val argumentsCount = arguments.size + if (!method.isStatic) 1 else 0
 
     val prefixUpdateResult = updateClassWithGotoLinePrefix(
-            targetLineInfo = targetLineInfo,
+            jumpAnalyzeTarget = jumpAnalyzeTarget,
+            jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
             targetMethod = methodName,
             argumentsCount = argumentsCount,
             klass = originalClassFile,
@@ -71,7 +73,7 @@ internal fun debuggerJump(
             override fun signature(): String = asmType.toString()
         }
 
-        val localsToSafeAndRestore = targetLineInfo.locals
+        val localsToSafeAndRestore = jumpAnalyzeTarget.locals
                 .filter { it.saveRestoreStatus == LocalVariableAnalyzer.SaveRestoreStatus.CanBeSavedAndRestored }
                 .map { it.toSlotLocalVariable() }
 

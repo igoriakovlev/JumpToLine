@@ -1,7 +1,6 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.jetbrains.rd.util.getOrCreate
-import org.jetbrains.plugins.setIp.LineTranslator
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes
@@ -20,39 +19,39 @@ internal enum class LineSafetyStatus {
     UninitializedExist
 }
 
-internal data class JumpLineAnalyzeResult(
-        val javaLine: Int,
-        val sourceLine: Int,
+internal data class JumpAnalyzeTarget(
+        val jumpTargetInfo: JumpTargetInfo,
         val locals: List<LocalDescriptor>,
         val localsFrame: LocalsFrame,
+        val safeStatus: LineSafetyStatus
+)
+
+
+
+internal data class JumpAnalyzeAdditionalInfo(
         val fistLocalsFrame: LocalsFrame,
-        val safeStatus: LineSafetyStatus,
         val methodLocalsCount: Int,
-        val instantFrame: Boolean,
         val frameOnFirstInstruction: Boolean
+)
+
+internal data class JumpAnalyzeResult(
+        val jumpAnalyzedTargets: List<JumpAnalyzeTarget>,
+        val jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo
 )
 
 internal class LocalVariableAnalyzer private constructor(
         private val ownerTypeName: String,
-        private val lineTranslator: LineTranslator?,
-        private val lineFilterSet: Set<Int>,
-        private val jumpFromLine: Int
+        private val linesAnalyzerResult: LinesAnalyzerResult
 ) : SingleMethodAnalyzer() {
 
     private data class SemiResult(
             val locals: List<LocalSemiDescriptor>,
             val localsFrame: LocalsFrame,
-            val instructionIndex: Long
+            val instructionIndex: Long,
+            val jumpTargetInfo: JumpTargetInfo
     )
 
-    private val instructionCountOnFrames = mutableSetOf<Long>()
-
-    private val linesExpectedFromFrame = mutableSetOf<Int>()
-
-    private val semiResult = mutableMapOf<Int, SemiResult>()
-    private val visitedLines = mutableSetOf<Int>()
-    private val visitedInstructions = mutableSetOf<Long>()
-    private val duplicatedLines = mutableSetOf<Int>()
+    private val semiResult = mutableMapOf<Long, SemiResult>()
     private val firstLocalsFrame = mutableListOf<Any>()
 
     private val localVariablesWithRanges: MutableMap<Int, MutableList<UserVisibleLocal>> = mutableMapOf()
@@ -64,9 +63,6 @@ internal class LocalVariableAnalyzer private constructor(
     private val localVariablesStoreIndexes: MutableMap<Int, Long> = mutableMapOf()
 
     private val labelToIndex: MutableMap<Label, Long> = mutableMapOf()
-
-    private var sourceLineIndex: Long? = null
-
 
     enum class SaveRestoreStatus {
         CanBeRestored,
@@ -87,7 +83,9 @@ internal class LocalVariableAnalyzer private constructor(
             val lastIndex = labelToIndex[it.end]
 
             if (firstIndex != null && lastIndex != null) {
-                val canBeSaved = sourceLineIndex in firstIndex..lastIndex
+                val canBeSaved = linesAnalyzerResult
+                        .jumpFromJavaLineIndexes.all { index -> index in firstIndex..lastIndex }
+
                 val canBeRestored = onIndex in firstIndex..lastIndex
 
                 if (canBeSaved && canBeRestored) return SaveRestoreStatus.CanBeSavedAndRestored
@@ -129,20 +127,21 @@ internal class LocalVariableAnalyzer private constructor(
         return false
     }
 
-    private val analyzeResult: List<JumpLineAnalyzeResult>? get() {
+    private val analyzeResult: JumpAnalyzeResult get() {
 
         val methodLocalsCount = semiResult.maxBy { it.value.locals.size }?.value?.locals?.size ?: 0
 
-        //We have to filter out targets with duplicated lines because we have not idea where exactly we are going to jump
-        return semiResult.map {
+        val analyzeTargets = mutableListOf<JumpAnalyzeTarget>()
 
-            val localsDescriptors = it.value.locals.map { semiDescriptor ->
-                val status = getSaveRestoreStatus(semiDescriptor.index, it.value.instructionIndex)
+        for (currentResult in semiResult.values) {
+
+            val localsDescriptors = currentResult.locals.map { semiDescriptor ->
+                val status = getSaveRestoreStatus(semiDescriptor.index, currentResult.instructionIndex)
                 LocalDescriptor(semiDescriptor.index, semiDescriptor.asmType, status)
             }
 
             val allVariablesIsSafe = localsDescriptors.all { local ->
-                local.saveRestoreStatus != SaveRestoreStatus.None || !isLocalAccessible(local.index, it.value.instructionIndex)
+                local.saveRestoreStatus != SaveRestoreStatus.None || !isLocalAccessible(local.index, currentResult.instructionIndex)
             }
 
             val allVariablesSavedAndRestored = allVariablesIsSafe && localsDescriptors.all {
@@ -153,24 +152,24 @@ internal class LocalVariableAnalyzer private constructor(
                 if (allVariablesSavedAndRestored) LineSafetyStatus.Safe else LineSafetyStatus.UninitializedExist
             } else LineSafetyStatus.NotSafe
 
-            //Translate line and skip it if translation is failed
-            val sourceLine = if (lineTranslator !== null) lineTranslator.translate(it.key) else it.key
-            sourceLine ?: throw AssertionError("Translated line should not be zero on result building")
-
-            val isInstantFrame = instructionCountOnFrames.contains(it.value.instructionIndex)
-
-            JumpLineAnalyzeResult(
-                    javaLine = it.key,
-                    sourceLine = sourceLine,
+            val jumpAnalyzeResult = JumpAnalyzeTarget(
+                    jumpTargetInfo = currentResult.jumpTargetInfo,
                     locals = localsDescriptors,
-                    fistLocalsFrame = firstLocalsFrame,
-                    localsFrame = it.value.localsFrame,
-                    safeStatus = safeStatus,
-                    methodLocalsCount = methodLocalsCount,
-                    instantFrame = isInstantFrame,
-                    frameOnFirstInstruction = instructionCountOnFrames.contains(0)
-            )
+                    localsFrame = currentResult.localsFrame,
+                    safeStatus = safeStatus
+           )
+
+            analyzeTargets.add(jumpAnalyzeResult)
         }
+
+        return JumpAnalyzeResult(
+                jumpAnalyzedTargets = analyzeTargets,
+                jumpAnalyzeAdditionalInfo = JumpAnalyzeAdditionalInfo(
+                    fistLocalsFrame = firstLocalsFrame,
+                    methodLocalsCount = methodLocalsCount,
+                    frameOnFirstInstruction = linesAnalyzerResult.instantFrameOnFirstInstruction
+                )
+        )
     }
 
 
@@ -284,11 +283,15 @@ internal class LocalVariableAnalyzer private constructor(
 
         super.visitFrame(type, numLocal, local, numStack, stack)
 
-        instructionCountOnFrames.add(instructionIndex)
-
+        if (numStack != 0) return
         if (local === null) return
 
-        if (linesExpectedFromFrame.isEmpty()) return
+        val jumpTargetInfo = linesAnalyzerResult
+                .jumpTargetInfos
+                .firstOrNull { it.instructionIndex == instructionIndex }
+                ?: return
+
+        if (!jumpTargetInfo.instantFrame) return
 
         val resultBuilder = mutableListOf<LocalSemiDescriptor>()
         val localsFrame = mutableListOf<Any>()
@@ -307,45 +310,45 @@ internal class LocalVariableAnalyzer private constructor(
             }
         }
 
-        linesExpectedFromFrame.forEach {
-            semiResult[it] = SemiResult(resultBuilder, localsFrame, instructionIndex)
-        }
-
-        linesExpectedFromFrame.clear()
+        semiResult[instructionIndex] = SemiResult(
+                locals = resultBuilder,
+                localsFrame = localsFrame,
+                instructionIndex = instructionIndex,
+                jumpTargetInfo = jumpTargetInfo
+        )
     }
 
     override fun visitLineNumber(line: Int, start: Label) {
 
         super.visitLineNumber(line, start)
 
-        if (!visitedInstructions.add(instructionIndex)) return
+        val jumpTargetInfo = linesAnalyzerResult
+                .jumpTargetInfos
+                .firstOrNull { it.instructionIndex == instructionIndex }
+                ?: return
 
-        if (sourceLineIndex == null && line == jumpFromLine) {
-            sourceLineIndex = instructionIndex
+        if (jumpTargetInfo.instantFrame) return
+
+        if (semiResult.containsKey(instructionIndex)) return
+
+        val analyzer = requireNotNull(analyzerAdapter)
+
+        val stack = requireNotNull(analyzer.stack)
+        if (stack.isNotEmpty()) return
+        val locals = requireNotNull(analyzer.locals)
+
+        val localsFrame = locals.toList()
+        val result = locals.mapIndexedNotNull { index, type ->
+            type.convertToType()?.let { LocalSemiDescriptor(index, it) }
         }
+        semiResult[instructionIndex] = SemiResult(
+                locals = result,
+                localsFrame = localsFrame,
+                instructionIndex = instructionIndex,
+                jumpTargetInfo = jumpTargetInfo
+        )
 
-        if (!lineFilterSet.contains(line)) return
 
-        if (!visitedLines.add(line)) {
-            duplicatedLines.add(line)
-        }
-
-        if (lineTranslator !== null && lineTranslator.translate(line) === null) return
-
-        if (semiResult.containsKey(line)) return
-        if (linesExpectedFromFrame.contains(line)) return
-
-        val locals = analyzerAdapter!!.locals
-
-        if (locals !== null) {
-            val localsFrame = locals.toList()
-            val result = locals.mapIndexedNotNull { index, type ->
-                type.convertToType()?.let { LocalSemiDescriptor(index, it) }
-            }
-            semiResult[line] = SemiResult(result, localsFrame, instructionIndex)
-        } else {
-            linesExpectedFromFrame.add(line)
-        }
     }
 
     companion object {
@@ -353,12 +356,10 @@ internal class LocalVariableAnalyzer private constructor(
                 classReader: ClassReader,
                 methodName: MethodName,
                 ownerTypeName: String,
-                lineTranslator: LineTranslator?,
-                lineFilterSet: Set<Int>,
-                jumpFromLine: Int
-        ): List<JumpLineAnalyzeResult>? {
+                linesAnalyzerResult: LinesAnalyzerResult
+        ): JumpAnalyzeResult? {
 
-            val methodVisitor = LocalVariableAnalyzer(ownerTypeName, lineTranslator, lineFilterSet, jumpFromLine)
+            val methodVisitor = LocalVariableAnalyzer(ownerTypeName, linesAnalyzerResult)
 
             val classVisitor = SingleMethodVisitorForClass(methodName, ownerTypeName, methodVisitor)
 

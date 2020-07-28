@@ -22,9 +22,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
-import org.jetbrains.plugins.setIp.injectionUtils.LineSafetyStatus
-import org.jetbrains.plugins.setIp.injectionUtils.onTrue
-import org.jetbrains.plugins.setIp.injectionUtils.runSynchronouslyWithProgress
+import org.jetbrains.plugins.setIp.injectionUtils.*
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -88,8 +86,7 @@ internal class SetIPArrowGutter(
 
         val selected = localAnalysisByRenderLine(line) ?: return false
 
-
-        when (selected.safeStatus) {
+        when (selected.first.safeStatus) {
             LineSafetyStatus.NotSafe -> {
                 val dialog = MessageDialog(project, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 1, null, true)
                 dialog.show()
@@ -108,7 +105,8 @@ internal class SetIPArrowGutter(
         project.runSynchronouslyWithProgress("Jumping to selected line...") { onFinish ->
             tryJumpToSelectedLine(
                     session = session,
-                    targetLineInfo = selected,
+                    jumpAnalyzeTarget = selected.first,
+                    jumpAnalyzeAdditionalInfo = selected.second,
                     classFile = jumpInfo.classFile,
                     commonTypeResolver = commonTypeResolver,
                     onFinish = onFinish
@@ -152,18 +150,20 @@ internal class SetIPArrowGutter(
                                           markupModel: MarkupModel,
                                           lineCount: Int): List<RangeHighlighter>? {
 
-        val linesToJump = currentJumpInfo.linesToJump ?: return null
+        val jumpAnalyzeInfo = currentJumpInfo.jumpAnalyzeResult ?: return null
         val firstLine = currentJumpInfo.firstLine
-        if (linesToJump.none()) return null
+        if (jumpAnalyzeInfo.jumpAnalyzedTargets.none()) return null
 
         val jumpHighlighters = mutableListOf<RangeHighlighter>()
 
-        linesToJump.forEach { lineToJump ->
-            val lineToSet = lineToJump.sourceLine - 1
-            (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
-                val attributes = if (lineToJump.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsageLineAttribute
-                val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                jumpHighlighters.add(highlighter)
+        jumpAnalyzeInfo.jumpAnalyzedTargets.forEach { info ->
+            info.jumpTargetInfo.lines.forEach { line ->
+                val lineToSet = line.sourceLine - 1
+                (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
+                    val attributes = if (info.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsageLineAttribute
+                    val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
+                    jumpHighlighters.add(highlighter)
+                }
             }
         }
 
@@ -260,8 +260,21 @@ internal class SetIPArrowGutter(
         return if (highlighters == null) WaitCursor else DefaultCursor
     }
 
-    private fun localAnalysisByRenderLine(line: Int) =
-            (currentJumpResult as? JumpLinesInfo)?.linesToJump?.firstOrNull { it.sourceLine == line + 1 }
+    private fun localAnalysisByRenderLine(requestedLine: Int): Pair<JumpAnalyzeTarget, JumpAnalyzeAdditionalInfo>? {
+        val info = currentJumpResult as? JumpLinesInfo ?: return null
+        val analyzeResult = info.jumpAnalyzeResult ?: return null
+
+        val targetByLine = analyzeResult
+                .jumpAnalyzedTargets
+                .firstOrNull { target ->
+                    target.jumpTargetInfo.lines.any {
+                        line -> line.sourceLine == requestedLine + 1
+                    }
+                }
+                ?: return null
+
+        return targetByLine to analyzeResult.jumpAnalyzeAdditionalInfo
+    }
 
     fun reset() {
         resetHighlighters()
