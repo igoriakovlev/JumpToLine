@@ -1,6 +1,14 @@
 package org.jetbrains.plugins.setIp.injectionUtils
 
 import com.intellij.debugger.engine.DebugProcessImpl
+import com.intellij.debugger.engine.JavaStackFrame
+import com.intellij.debugger.engine.JavaValue
+import com.intellij.lang.Language
+import com.intellij.xdebugger.evaluation.EvaluationMode
+import com.intellij.xdebugger.evaluation.XDebuggerEvaluator
+import com.intellij.xdebugger.frame.XValue
+import com.intellij.xdebugger.impl.breakpoints.XExpressionImpl
+import com.jetbrains.jdi.ArrayReferenceImpl
 import com.sun.jdi.*
 import com.sun.jdi.ObjectReference.INVOKE_SINGLE_THREADED
 import java.util.*
@@ -26,15 +34,21 @@ private fun ThreadReference.invokeStatic(
 internal fun tryGetTypeByteCode(
         process: DebugProcessImpl,
         threadReference: ThreadReference,
-        targetType: ClassType
-): ByteArray? = methodByteCodeCache.getOrPut(targetType) {
-    process.suspendBreakpoints()
-    try {
-        threadReference.tryGetTypeByteCodeImpl(targetType)
-    } catch (e: Exception) { null }
-    finally {
-        process.resumeBreakpoints()
+        targetType: ClassType,
+        onFinish: (ByteArray?) -> Unit
+) {
+    val result = methodByteCodeCache.getOrPut(targetType) {
+        process.suspendBreakpoints()
+        try {
+            threadReference.tryGetTypeByteCodeImpl(targetType)
+        } catch (e: Exception) {
+            null
+        } finally {
+            process.resumeBreakpoints()
+        }
     }
+
+    onFinish(result)
 }
 
 
@@ -125,4 +139,57 @@ private fun ThreadReference.tryGetTypeByteCodeImpl(targetType: ClassType): ByteA
 
     //maybe we should call available one again to check it is empty
     return array.values.map { (it as ByteValue).value() }.toByteArray()
+}
+
+internal fun tryGetTypeByteCodeByEvaluate(
+        process: DebugProcessImpl,
+        targetType: ClassType,
+        onFinish: (ByteArray?) -> Unit) {
+
+    methodByteCodeCache[targetType]?.run {
+        return onFinish(this)
+    }
+
+    val language = Language.findLanguageByID("JAVA")
+            ?: return onFinish(null)
+
+    val evaluator = (process.session.xDebugSession?.currentStackFrame as? JavaStackFrame)
+            ?.evaluator
+            ?: return onFinish(null)
+
+    val className = (targetType.name().takeLastWhile { it != '.' } + ".class")
+    val typeName = targetType.name()
+
+    val fragmentText = """
+        java.io.InputStream stream = java.lang.Class.forName("$typeName").getResourceAsStream("$className");
+        int size  = stream.available();
+        byte[] result = new byte[size];
+        int readed = 0;
+        int newReaded = 1;
+        while(readed < size && newReaded > 0) {
+            newReaded = stream.read(result, readed, size - readed);
+            readed += newReaded;
+        }
+        byte[] out = newReaded == readed ? result : null;
+    """
+
+    val expression = XExpressionImpl(fragmentText, language, null, EvaluationMode.CODE_FRAGMENT)
+
+    evaluator.evaluate(expression, object : XDebuggerEvaluator.XEvaluationCallback {
+        override fun errorOccurred(errorMessage: String) {
+            methodByteCodeCache[targetType] = nullWithLog("SetIP evaluator error $errorMessage")
+            return onFinish(null)
+        }
+        override fun evaluated(result: XValue) {
+            val array = (result as? JavaValue)?.descriptor?.value as? ArrayReferenceImpl
+            if (array == null) {
+                methodByteCodeCache[targetType] = nullWithLog("SetIP evaluator unexpected evaluation result")
+                return onFinish(null)
+            }
+
+            val byteArray = array.values.map { (it as ByteValue).value() }.toByteArray()
+            methodByteCodeCache[targetType] = byteArray
+            return onFinish(byteArray)
+        }
+    }, null)
 }

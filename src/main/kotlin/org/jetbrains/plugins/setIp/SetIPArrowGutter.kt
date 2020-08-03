@@ -309,12 +309,13 @@ internal class SetIPArrowGutter(
             inProgress = true
         }
 
-        project.runSynchronouslyWithProgress("Analyzing jump lines...", false) {
-            try {
-                currentJumpResult = tryGetLinesToJump(session)
-            } finally {
+        project.runSynchronouslyWithProgress("Analyzing jump lines...") { onFinish ->
+            val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
+                currentJumpResult = result ?: UnknownErrorResult
                 inProgress = false
+                onFinish()
             }
+            tryGetLinesToJump(session, myOnFinish)
         }
     }
 }

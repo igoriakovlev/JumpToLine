@@ -105,8 +105,8 @@ internal sealed class GetLinesToJumpResult
 internal class JumpLinesInfo(val jumpAnalyzeResult: JumpAnalyzeResult?, val classFile: ByteArray?, val linesToGoto: List<LineInfo>, val firstLine: LineInfo?) : GetLinesToJumpResult()
 internal object UnknownErrorResult : GetLinesToJumpResult()
 
-internal fun tryGetLinesToJump(session: DebuggerSession) =
-        runInDebuggerThread(session) { tryGetLinesToJumpImpl(session) } ?: UnknownErrorResult
+internal fun tryGetLinesToJump(session: DebuggerSession, onFinish: (GetLinesToJumpResult?) -> Unit) =
+        runInDebuggerThread(session) { tryGetLinesToJumpImpl(session, onFinish) }
 
 private class StrataViaLocationTranslator(
         currentLocation: Location,
@@ -124,24 +124,24 @@ private class StrataViaLocationTranslator(
     }
 }
 
-private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResult? {
+private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesToJumpResult?) -> Unit) {
     val process = session.process
 
-    if (!process.virtualMachineProxy.isSuspended) return nullWithLog("Process is not suspended")
+    if (!process.virtualMachineProxy.isSuspended) return onFinish(nullWithLog("Process is not suspended"))
 
     val context = process.debuggerContext
 
-    val threadProxy = context.threadProxy ?: return nullWithLog("Cannot get threadProxy")
-    if (threadProxy.frameCount() < 2) return nullWithLog("frameCount < 2")
+    val threadProxy = context.threadProxy ?: return onFinish(nullWithLog("Cannot get threadProxy"))
+    if (threadProxy.frameCount() < 2) return onFinish(nullWithLog("frameCount < 2"))
 
-    val frame = context.frameProxy ?: return nullWithLog("Cannot get frameProxy")
+    val frame = context.frameProxy ?: return onFinish(nullWithLog("Cannot get frameProxy"))
 
     val location = frame.location()
     val method = location.method()
-    val classType = location.declaringType() as? ClassType ?: return nullWithLog("Invalid type to jump")
+    val classType = location.declaringType() as? ClassType ?: return onFinish(nullWithLog("Invalid type to jump"))
 
     val jumpFromLine = location.lineNumber()
-    if (jumpFromLine == -1) return nullWithLog("Invalid line to jump -1")
+    if (jumpFromLine == -1) return onFinish(nullWithLog("Invalid line to jump -1"))
 
     //create line translator for Kotlin if able
     val lineTranslator = classType.availableStrata()?.let {
@@ -159,11 +159,16 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
             !checkIsTopMethodRecursive(location, threadProxy) &&
             process.isEvaluationPossible
 
-    val jumpTargets: Pair<JumpAnalyzeResult, ByteArray>? = jumpOnLineAvailable.onTrue {
-        val byteCode = tryGetTypeByteCode(process, threadProxy.threadReference, classType)
-                ?: nullWithLog<ByteArray>("Cannot get class file for ${classType.name()}")
+    if (!jumpOnLineAvailable) {
+        return onFinish(JumpLinesInfo(null, null, linesToGoto, firstLine))
+    }
 
-        byteCode?.let { klass ->
+    tryGetTypeByteCodeByEvaluate(process, classType) { klass ->
+    //tryGetTypeByteCode(process, threadProxy.threadReference, classType) { klass ->
+        if (klass == null) {
+            unitWithLog("Cannot get class file for ${classType.name()}")
+            onFinish(JumpLinesInfo(null, null, linesToGoto, firstLine))
+        } else {
             val analyzeResult = getAvailableJumpLines(
                     ownerTypeName = classType.name(),
                     targetMethod = method.methodName,
@@ -172,12 +177,9 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession): GetLinesToJumpResul
                     jumpFromJavaLine = jumpFromLine,
                     analyzeFirstLine = false //We skip the first line because it is not need to analyze for jump
             ) ?: nullWithLog<JumpAnalyzeResult>("Cannot get available goto lines")
-
-            analyzeResult?.let { it to klass }
+            onFinish(JumpLinesInfo(analyzeResult, klass, linesToGoto, firstLine))
         }
     }
-
-    return JumpLinesInfo(jumpTargets?.first, jumpTargets?.second, linesToGoto, firstLine)
 }
 
 internal fun tryJumpToSelectedLine(
