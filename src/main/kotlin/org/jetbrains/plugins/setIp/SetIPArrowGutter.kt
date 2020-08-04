@@ -156,11 +156,14 @@ internal class SetIPArrowGutter(
 
         val jumpHighlighters = mutableListOf<RangeHighlighter>()
 
+        var yellowLineAdded = false
         jumpAnalyzeInfo.jumpAnalyzedTargets.forEach { info ->
             info.jumpTargetInfo.lines.forEach { line ->
                 val lineToSet = line.sourceLine - 1
                 (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
                     val attributes = if (info.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsageLineAttribute
+                    yellowLineAdded = yellowLineAdded || info.safeStatus == LineSafetyStatus.NotSafe
+
                     val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
                     jumpHighlighters.add(highlighter)
                 }
@@ -170,6 +173,14 @@ internal class SetIPArrowGutter(
         if (firstLine != null) {
             val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
             jumpHighlighters.add(firstLineHighlighter)
+        }
+
+        if (jumpHighlighters.size == 0 || yellowLineAdded) {
+            ToolWindowManager.getInstance(project).notifyByBalloon(
+                    ToolWindowId.DEBUG,
+                    MessageType.INFO,
+                    "Hold Ctrl/⌘ key to enter into RunToCursor mode."
+            )
         }
 
         return jumpHighlighters
