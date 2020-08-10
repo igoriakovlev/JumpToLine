@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>org.jetbrains.setIp</id>
   <name>Debugger SetIP</name>
-  <version>0.0.9</version>
+  <version>0.1.0</version>
   <vendor email="igor.yakovlev@jetbrains.com" url="jetbrains.com">Igor Yakovlev</vendor>
 
   <depends>com.intellij.modules.lang</depends>
