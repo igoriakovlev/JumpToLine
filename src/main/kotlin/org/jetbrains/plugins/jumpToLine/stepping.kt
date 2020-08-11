@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.SuspendContextImpl
@@ -10,7 +10,7 @@ import com.jetbrains.jdi.StackFrameImpl
 import com.sun.jdi.*
 import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
-import org.jetbrains.plugins.setIp.injectionUtils.*
+import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 
 
 /**

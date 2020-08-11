@@ -1,6 +1,6 @@
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
-import org.jetbrains.plugins.setIp.LineTranslator
+import org.jetbrains.plugins.jumpToLine.LineTranslator
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Label
 import org.objectweb.asm.commons.AnalyzerAdapter

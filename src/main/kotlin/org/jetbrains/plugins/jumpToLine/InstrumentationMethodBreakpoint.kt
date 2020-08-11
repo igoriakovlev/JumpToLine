@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.events.SuspendContextCommandImpl
@@ -8,7 +8,7 @@ import com.intellij.debugger.ui.breakpoints.SyntheticLineBreakpoint
 import com.intellij.openapi.editor.Document
 import com.sun.jdi.Location
 import com.sun.jdi.event.LocatableEvent
-import org.jetbrains.plugins.setIp.injectionUtils.finishOnException
+import org.jetbrains.plugins.jumpToLine.injectionUtils.finishOnException
 
 internal class InstrumentationMethodBreakpoint(
         private val process: DebugProcessImpl,

@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.commons.AnalyzerAdapter

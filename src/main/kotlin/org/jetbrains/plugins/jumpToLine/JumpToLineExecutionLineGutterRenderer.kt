@@ -3,7 +3,7 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.codeInsight.daemon.GutterMark
 import com.intellij.debugger.impl.DebuggerSession
@@ -14,7 +14,7 @@ import com.intellij.openapi.util.IconLoader
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import javax.swing.Icon
 
-internal class SetIPExecutionLineGutterRenderer(
+internal class JumpToLineExecutionLineGutterRenderer(
     private val session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
     project: Project,
@@ -31,8 +31,8 @@ internal class SetIPExecutionLineGutterRenderer(
     override fun hashCode(): Int = 0
 
     companion object {
-        val jumpOkIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatement.svg", this.javaClass)
-        val jumpFailIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/setIp/nextStatementFail.svg", this.javaClass)
+        val jumpOkIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatement.svg", this.javaClass)
+        val jumpFailIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatementFail.svg", this.javaClass)
     }
 
     override fun getIcon(): Icon =
@@ -49,7 +49,7 @@ internal class SetIPExecutionLineGutterRenderer(
 
     override fun getTooltipText(): String? = canJump.second
 
-    private val gutter = SetIPArrowGutter(project, commonTypeResolver, session )
+    private val gutter = JumpToLineArrowGutter(project, commonTypeResolver, session )
 
     private var canJump: Pair<Boolean, String> = false to ""
 }

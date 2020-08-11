@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.application.ApplicationManager
@@ -22,13 +22,13 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
-import org.jetbrains.plugins.setIp.injectionUtils.*
+import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
 
-internal class SetIPArrowGutter(
+internal class JumpToLineArrowGutter(
         private val project: Project,
         private val commonTypeResolver: CommonTypeResolver,
         private val session: DebuggerSession
@@ -88,7 +88,7 @@ internal class SetIPArrowGutter(
 
         when (selected.first.safeStatus) {
             LineSafetyStatus.NotSafe -> {
-                val dialog = MessageDialog(project, "This jump is not safe! Continue?", "SetIP", arrayOf("Yes", "No way!"), 1, null, true)
+                val dialog = MessageDialog(project, "This jump is not safe! Continue?", "JumpToLine", arrayOf("Yes", "No way!"), 1, null, true)
                 dialog.show()
                 if (dialog.exitCode == 1) return false
             }

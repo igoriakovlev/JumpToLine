@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project

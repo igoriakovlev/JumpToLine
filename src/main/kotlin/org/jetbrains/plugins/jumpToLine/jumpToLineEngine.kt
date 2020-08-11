@@ -3,7 +3,7 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
@@ -17,7 +17,7 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
-import org.jetbrains.plugins.setIp.injectionUtils.*
+import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
     var result: T? = null
@@ -39,9 +39,9 @@ internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl)
         runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR0
 
 private const val NOT_SUSPENDED = "Debugger session is not suspended"
-private const val MAIN_FUNCTION_CALL = "SetIP is not available for main function call"
-private const val TOP_FRAME_NOT_SELECTED = "SetIP is not available for non top frames"
-private const val COROUTINE_SUSPECTED = "SetIP for Kotlin coroutines is not supported"
+private const val MAIN_FUNCTION_CALL = "JumpToLine is not available for main function call"
+private const val TOP_FRAME_NOT_SELECTED = "JumpToLine is not available for non top frames"
+private const val COROUTINE_SUSPECTED = "JumpToLine for Kotlin coroutines is not supported"
 private const val METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE = "Can not do jump for method without debug info or for native method"
 private const val AVAILABLE = "Grab to change execution position"
 private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"

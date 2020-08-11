@@ -1,6 +1,6 @@
 <idea-plugin>
-  <id>org.jetbrains.setIp</id>
-  <name>Debugger SetIP</name>
+  <id>org.jetbrains.jumpToLine</id>
+  <name>Debugger JumpToLine</name>
   <version>0.1.0</version>
   <vendor email="igor.yakovlev@jetbrains.com" url="jetbrains.com">Igor Yakovlev</vendor>
 
@@ -11,6 +11,6 @@
   <description>Moves your execution point anywhere possible position</description>
 
   <extensions defaultExtensionNs="com.intellij">
-    <postStartupActivity implementation="org.jetbrains.plugins.setIp.SetIPStartupActivity" />
+    <postStartupActivity implementation="org.jetbrains.plugins.jumpToLine.JumpToLineStartupActivity" />
   </extensions>
 </idea-plugin>

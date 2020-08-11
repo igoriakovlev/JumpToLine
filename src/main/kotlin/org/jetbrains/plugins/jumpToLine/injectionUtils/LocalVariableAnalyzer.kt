@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
 import com.jetbrains.rd.util.getOrCreate
 import org.objectweb.asm.ClassReader

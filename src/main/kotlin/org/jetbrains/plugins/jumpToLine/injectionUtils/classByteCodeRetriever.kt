@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.JavaStackFrame
@@ -177,13 +177,13 @@ internal fun tryGetTypeByteCodeByEvaluate(
 
     evaluator.evaluate(expression, object : XDebuggerEvaluator.XEvaluationCallback {
         override fun errorOccurred(errorMessage: String) {
-            methodByteCodeCache[targetType] = nullWithLog("SetIP evaluator error $errorMessage")
+            methodByteCodeCache[targetType] = nullWithLog("JumpToLine evaluator error $errorMessage")
             return onFinish(null)
         }
         override fun evaluated(result: XValue) {
             val array = (result as? JavaValue)?.descriptor?.value as? ArrayReferenceImpl
             if (array == null) {
-                methodByteCodeCache[targetType] = nullWithLog("SetIP evaluator unexpected evaluation result")
+                methodByteCodeCache[targetType] = nullWithLog("JumpToLine evaluator unexpected evaluation result")
                 return onFinish(null)
             }
 

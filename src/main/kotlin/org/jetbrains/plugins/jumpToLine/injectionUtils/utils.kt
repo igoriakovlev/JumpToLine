@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
@@ -11,7 +11,7 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
-private val logger = Logger.getInstance("SetIP Plugin")
+private val logger = Logger.getInstance("JumpToLine Plugin")
 
 internal class ReturnLikeException : Exception()
 
@@ -63,7 +63,7 @@ internal fun Project.runSynchronouslyWithProgress(progressTitle: String, action:
             val release = { semaphore.release() }
             action(release)
             if (!semaphore.tryAcquire(15, TimeUnit.SECONDS)) {
-                throw TimeoutException("SetIP timeout on $progressTitle")
+                throw TimeoutException("JumpToLine timeout on $progressTitle")
             }
         }
     })

@@ -3,14 +3,14 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.plugins.setIp.injectionUtils
+package org.jetbrains.plugins.jumpToLine.injectionUtils
 
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.ui.breakpoints.StackCapturingLineBreakpoint
-import org.jetbrains.plugins.setIp.CommonTypeResolver
-import org.jetbrains.plugins.setIp.LineTranslator
-import org.jetbrains.plugins.setIp.TypeResolveError
+import org.jetbrains.plugins.jumpToLine.CommonTypeResolver
+import org.jetbrains.plugins.jumpToLine.LineTranslator
+import org.jetbrains.plugins.jumpToLine.TypeResolveError
 import org.objectweb.asm.*
 import org.objectweb.asm.ClassReader.EXPAND_FRAMES
 

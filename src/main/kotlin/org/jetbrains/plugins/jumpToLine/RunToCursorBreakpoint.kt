@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.setIp
+package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.RequestHint
 import com.intellij.debugger.engine.events.SuspendContextCommandImpl
