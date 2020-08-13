@@ -155,14 +155,14 @@ internal class JumpToLineArrowGutter(
                                           markupModel: MarkupModel,
                                           lineCount: Int): List<RangeHighlighter>? {
 
-        val jumpAnalyzeInfo = currentJumpInfo.jumpAnalyzeResult ?: return null
+        val jumpAnalyzeInfo = currentJumpInfo.jumpAnalyzeResult
         val firstLine = currentJumpInfo.firstLine
-        if (jumpAnalyzeInfo.jumpAnalyzedTargets.none()) return null
+        if (jumpAnalyzeInfo == null && firstLine == null) return null
 
         val jumpHighlighters = mutableListOf<RangeHighlighter>()
 
         var yellowLineAdded = false
-        jumpAnalyzeInfo.jumpAnalyzedTargets.forEach { info ->
+        jumpAnalyzeInfo?.jumpAnalyzedTargets?.forEach { info ->
             info.jumpTargetInfo.lines.forEach { line ->
                 val lineToSet = line.sourceLine - 1
                 (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
@@ -175,17 +175,17 @@ internal class JumpToLineArrowGutter(
             }
         }
 
-        if (firstLine != null) {
-            val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-            jumpHighlighters.add(firstLineHighlighter)
-        }
-
         if (jumpHighlighters.size == 0 || yellowLineAdded) {
             ToolWindowManager.getInstance(project).notifyByBalloon(
                     ToolWindowId.DEBUG,
                     MessageType.INFO,
                     "Press and hold Ctrl/⌘ to enter into the Run to Cursor mode."
             )
+        }
+
+        if (firstLine != null) {
+            val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+            jumpHighlighters.add(firstLineHighlighter)
         }
 
         return jumpHighlighters
