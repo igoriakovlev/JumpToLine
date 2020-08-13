@@ -93,7 +93,7 @@ internal class JumpToLineArrowGutter(
 
         when (selected.first.safeStatus) {
             LineSafetyStatus.NotSafe -> {
-                val dialog = MessageDialog(project, "This jump is not safe! Continue?", "JumpToLine", arrayOf("Yes", "No way!"), 1, null, true)
+                val dialog = MessageDialog(project, "This jump could be potentially unsafe. Please, consider the risks. Do you want to continue?", "JumpToLine", arrayOf("Yes", "No"), 1, null, true)
                 dialog.show()
                 if (dialog.exitCode == 1) return false
             }
@@ -107,7 +107,7 @@ internal class JumpToLineArrowGutter(
             else -> {}
         }
 
-        project.runSynchronouslyWithProgress("Jumping to selected line...") { onFinish ->
+        project.runSynchronouslyWithProgress("Jumping to the selected line...") { onFinish ->
             tryJumpToSelectedLine(
                     session = session,
                     jumpAnalyzeTarget = selected.first,
@@ -184,7 +184,7 @@ internal class JumpToLineArrowGutter(
             ToolWindowManager.getInstance(project).notifyByBalloon(
                     ToolWindowId.DEBUG,
                     MessageType.INFO,
-                    "Hold Ctrl/⌘ key to enter into RunToCursor mode."
+                    "Press and hold Ctrl/⌘ to enter into the Run to Cursor mode."
             )
         }
 
@@ -314,7 +314,7 @@ internal class JumpToLineArrowGutter(
             inProgress = true
         }
 
-        project.runSynchronouslyWithProgress("Analyzing jump lines...") { onFinish ->
+        project.runSynchronouslyWithProgress("Analyzing the lines...") { onFinish ->
             val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
                 currentJumpResult = result ?: UnknownErrorResult
                 inProgress = false

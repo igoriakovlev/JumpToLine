@@ -38,16 +38,16 @@ internal val Method.methodName get() = MethodName(name(), signature(), genericSi
 internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl) =
         runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR0
 
-private const val NOT_SUSPENDED = "Debugger session is not suspended"
-private const val MAIN_FUNCTION_CALL = "JumpToLine is not available for main function call"
-private const val TOP_FRAME_NOT_SELECTED = "JumpToLine is not available for non top frames"
-private const val COROUTINE_SUSPECTED = "JumpToLine for Kotlin coroutines is not supported"
-private const val METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE = "Can not do jump for method without debug info or for native method"
-private const val AVAILABLE = "Grab to change execution position"
-private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Available only when all threads are suspended"
-private const val UNKNOWN_ERROR0 = "Cant jump for unknown reason (#0)"
-private const val UNKNOWN_ERROR1 = "Cant jump for unknown reason (#1)"
-private const val UNKNOWN_ERROR2 = "Cant jump for unknown reason (#2)"
+private const val NOT_SUSPENDED = "Process is not suspended"
+private const val MAIN_FUNCTION_CALL = "Jump to line is not available for the main function"
+private const val TOP_FRAME_NOT_SELECTED = "Jump to line is available for top frame only"
+private const val COROUTINE_SUSPECTED = "Jump to line is not available for Kotlin coroutine"
+private const val METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE = "Jump to line is not available for methods without debug information"
+private const val AVAILABLE = "Drag and drop the arrow to set an execution point"
+private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Jump to line is available only when all the threads are suspended"
+private const val UNKNOWN_ERROR0 = "Unexpected jump error (#0)"
+private const val UNKNOWN_ERROR1 = "Unexpected jump error (#1)"
+private const val UNKNOWN_ERROR2 = "Unexpected jump error (#2)"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
