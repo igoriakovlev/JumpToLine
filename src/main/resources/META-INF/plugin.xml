@@ -1,6 +1,6 @@
 <idea-plugin>
   <id>org.jetbrains.jumpToLine</id>
-  <name>Debugger JumpToLine</name>
+  <name>Jump to Line</name>
   <version>0.1.0</version>
   <vendor email="igor.yakovlev@jetbrains.com" url="jetbrains.com">Igor Yakovlev</vendor>
 
@@ -8,7 +8,10 @@
   <depends>com.intellij.modules.java</depends>
   <idea-version since-build="201.3803.71"/>
 
-  <description>Moves your execution point anywhere possible position</description>
+  <description>
+    The Jump to line plugin allows you to get to any line of code while debugging. Drag and drop a yellow arrow to the desired place in the gutter, and it will put an execution point there. In contrast to stepping, the plugin enables you to start running your program from that point without executing the preceding code.
+    Jumping to lines is possible both forward and backward within a function. Jump to line highlights the lines suitable for jumps in green. Making changes to some lines may break the workflow. That’s why the IDE will highlight any risky lines in yellow. You can still move to them, but you should first consider the possible inconsistencies that may result.
+  </description>
 
   <extensions defaultExtensionNs="com.intellij">
     <postStartupActivity implementation="org.jetbrains.plugins.jumpToLine.JumpToLineStartupActivity" />
