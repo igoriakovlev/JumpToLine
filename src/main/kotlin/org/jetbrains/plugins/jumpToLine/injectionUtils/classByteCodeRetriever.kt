@@ -175,7 +175,7 @@ internal fun tryGetTypeByteCodeByEvaluate(
             newReaded = stream.read(result, readed, size - readed);
             readed += newReaded;
         }
-        byte[] out = newReaded == readed ? result : null;
+        byte[] out = size == readed ? result : null;
     """
 
     val expression = XExpressionImpl(fragmentText, language, null, EvaluationMode.CODE_FRAGMENT)
