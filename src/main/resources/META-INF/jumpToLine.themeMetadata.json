@@ -1,0 +1,16 @@
+{
+  "name": "Jump to Line",
+  "fixed": false,
+  "ui": [
+    {
+      "key": "JumpToLine.dropLine.safe",
+      "description": "The line color that denotes a safe execution jump point.",
+      "source": "org.jetbrains.plugins.jumpToLine.JumpToLineArrowGutter"
+    },
+    {
+      "key": "JumpToLine.dropLine.unsafe",
+      "description": "The line color that denotes a unsafe execution jump point.",
+      "source": "org.jetbrains.plugins.jumpToLine.JumpToLineArrowGutter"
+    }
+  ]
+}

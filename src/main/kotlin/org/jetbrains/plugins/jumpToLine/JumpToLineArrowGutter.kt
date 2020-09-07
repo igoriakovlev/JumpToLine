@@ -25,6 +25,7 @@ import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
+import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
@@ -126,10 +127,16 @@ internal class JumpToLineArrowGutter(
         private val WaitCursor = Cursor(Cursor.WAIT_CURSOR)
         private val smartStepInto =
                 EditorColorsManager.getInstance().globalScheme.getAttributes(DebuggerColors.SMART_STEP_INTO_TARGET)
-        private val greenColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(30,40, 0) else Color(199,225, 94)
-        private val yellowColor = if (EditorColorsManager.getInstance().isDarkEditor) Color(50,40, 0) else Color(248,253, 185)
+        private val greenColor = JBColor.namedColor(
+            "JumpToLine.dropLine.safe",
+            JBColor(Color(199, 225, 94), Color(30, 40, 0))
+        )
+        private val yellowColor = JBColor.namedColor(
+            "JumpToLine.dropLine.unsafe",
+            JBColor(Color(248, 253, 185), Color(50, 40, 0))
+        )
         private val safeLineAttribute = smartStepInto.clone().also { it.backgroundColor = greenColor }
-        private val unsageLineAttribute = smartStepInto.clone().also { it.backgroundColor = yellowColor }
+        private val unsafeLineAttribute = smartStepInto.clone().also { it.backgroundColor = yellowColor }
     }
 
     private fun resetHighlighters() {
@@ -166,7 +173,7 @@ internal class JumpToLineArrowGutter(
             info.jumpTargetInfo.lines.forEach { line ->
                 val lineToSet = line.sourceLine - 1
                 (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
-                    val attributes = if (info.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsageLineAttribute
+                    val attributes = if (info.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsafeLineAttribute
                     yellowLineAdded = yellowLineAdded || info.safeStatus == LineSafetyStatus.NotSafe
 
                     val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
