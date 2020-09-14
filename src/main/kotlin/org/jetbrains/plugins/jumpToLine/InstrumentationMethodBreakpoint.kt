@@ -20,7 +20,7 @@ internal class InstrumentationMethodBreakpoint(
         private val thread: ThreadReferenceProxyImpl,
         private val location: Location,
         private val stopAfterAction: Boolean,
-        private val onFinish: () -> Unit,
+        private val onFinish: (Boolean) -> Unit,
         private val action: () -> Unit
 ) : SyntheticLineBreakpoint(process.project) {
 

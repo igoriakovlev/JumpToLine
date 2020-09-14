@@ -28,6 +28,8 @@ import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
+import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
+import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 import java.awt.Color
 import java.awt.Cursor
@@ -323,8 +325,14 @@ internal class JumpToLineArrowGutter(
 
         project.runSynchronouslyWithProgress("Analyzing the lines...") { onFinish ->
             val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
-                currentJumpResult = result ?: UnknownErrorResult
-                inProgress = false
+                synchronized(session) {
+                    currentJumpResult = result ?: UnknownErrorResult
+                    inProgress = false
+                    FUSLogger.log(
+                        event = FUSLogger.JumpToLineEvent.GetLinesToJump,
+                        status = if (result != null) JumpToLineStatus.Success else JumpToLineStatus.Success
+                    )
+                }
                 onFinish()
             }
             tryGetLinesToJump(session, myOnFinish)

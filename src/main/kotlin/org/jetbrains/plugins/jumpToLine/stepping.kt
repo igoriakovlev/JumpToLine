@@ -37,7 +37,7 @@ internal fun debuggerJump(
         commonTypeResolver: CommonTypeResolver,
         process: DebugProcessImpl,
         suspendContext: SuspendContextImpl,
-        onFinish: () -> Unit
+        onFinish: (Boolean) -> Unit
 ) {
     fun currentFrame() = threadProxy.frame(0)
 
@@ -157,7 +157,7 @@ internal fun debuggerJump(
             }
 
             process.resumeBreakpoints()
-            onFinish()
+            onFinish(true)
         }
     }
 
@@ -173,7 +173,7 @@ internal fun jumpByRunToLine(
         suspendContext: SuspendContextImpl,
         threadProxy: ThreadReferenceProxyImpl,
         line: Int,
-        onFinish: () -> Unit)
+        onFinish: (Boolean) -> Unit)
 {
     fun currentFrame() = threadProxy.frame(0)
     val method = currentFrame().location().method()
@@ -197,5 +197,5 @@ internal fun jumpByRunToLine(
         })
     }
     process.suspendManager.resume(process.suspendManager.pausedContext)
-    onFinish()
+    onFinish(true)
 }

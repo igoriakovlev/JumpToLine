@@ -17,6 +17,8 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
+import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
+import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineEvent.*
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
@@ -182,6 +184,17 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
     }
 }
 
+private fun loggedOnFinish(
+        unLoggedFinish: () -> Unit,
+        event: FUSLogger.JumpToLineEvent
+): (Boolean) -> Unit = { success: Boolean ->
+    FUSLogger.log(
+        event = event,
+        status = if (success) FUSLogger.JumpToLineStatus.Success else FUSLogger.JumpToLineStatus.Failed
+    )
+    unLoggedFinish()
+}
+
 internal fun tryJumpToSelectedLine(
         session: DebuggerSession,
         jumpAnalyzeTarget: JumpAnalyzeTarget,
@@ -192,7 +205,13 @@ internal fun tryJumpToSelectedLine(
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-            finishOnException(onFinish) {
+
+            val loggedFinish = loggedOnFinish(
+                    unLoggedFinish = onFinish,
+                    event = if (jumpAnalyzeTarget.safeStatus != LineSafetyStatus.NotSafe) JumpToGreenLine else JumpToYellowLine
+            )
+
+            finishOnException(loggedFinish) {
                 tryJumpToSelectedLineImpl(
                         session = session,
                         classFile = classFile,
@@ -200,7 +219,7 @@ internal fun tryJumpToSelectedLine(
                         jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
                         commonTypeResolver = commonTypeResolver,
                         suspendContext = suspendContext,
-                        onFinish = onFinish
+                        onFinish = loggedFinish
                 )
             }
         }
@@ -215,12 +234,17 @@ internal fun tryJumpToByGoto(
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-            finishOnException(onFinish) {
+            val loggedFinish = loggedOnFinish(
+                    unLoggedFinish = onFinish,
+                    event = GoToLine
+            )
+
+            finishOnException(loggedFinish) {
                 jumpByRunToLineImpl(
                         session = session,
                         suspendContext = suspendContext,
                         line = line,
-                        onFinish = onFinish
+                        onFinish = loggedFinish
                 )
             }
         }
@@ -232,7 +256,7 @@ private fun jumpByRunToLineImpl(
         session: DebuggerSession,
         suspendContext: SuspendContextImpl,
         line: Int,
-        onFinish: () -> Unit
+        onFinish: (Boolean) -> Unit
 ) {
 
     val process = session.process
@@ -261,7 +285,7 @@ private fun tryJumpToSelectedLineImpl(
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
         suspendContext: SuspendContextImpl,
-        onFinish: () -> Unit
+        onFinish: (Boolean) -> Unit
 ) {
     val process = session.process
 

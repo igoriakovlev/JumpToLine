@@ -19,6 +19,7 @@
 
   <extensions defaultExtensionNs="com.intellij">
     <postStartupActivity implementation="org.jetbrains.plugins.jumpToLine.JumpToLineStartupActivity" />
+    <statistics.counterUsagesCollector groupId="ide.jumpToLine" version="1"/>
     <themeMetadataProvider path="/META-INF/jumpToLine.themeMetadata.json"/>
   </extensions>
 </idea-plugin>
