@@ -30,7 +30,9 @@ import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineStatus
-import org.jetbrains.plugins.jumpToLine.injectionUtils.*
+import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
+import org.jetbrains.plugins.jumpToLine.injectionUtils.onTrue
+import org.jetbrains.plugins.jumpToLine.injectionUtils.runSynchronouslyWithProgress
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -38,8 +40,8 @@ import java.awt.event.MouseListener
 
 internal class JumpToLineArrowGutter(
         private val project: Project,
-        private val commonTypeResolver: CommonTypeResolver,
-        private val session: DebuggerSession
+        private val session: DebuggerSession,
+        private val jumpService: JumpService
 ): GutterDraggableObject {
 
     private var highlighters: List<RangeHighlighter>? = null
@@ -72,56 +74,21 @@ internal class JumpToLineArrowGutter(
         resetHighlighters()
         if (line == currentLine) return false
 
-        val jumpInfo = currentJumpResult as? JumpLinesInfo ?: return false
-
-        val goingToSelectedLine = "Going to selected line..."
+        val jumpInfo = jumpService.tryGetJumpInfoImmediately() ?: return false
 
         if (actionId == 1) {
             val gotoLine = jumpInfo.linesToGoto.firstOrNull { it.sourceLine - 1 == line } ?: return false
-            project.runSynchronouslyWithProgress(goingToSelectedLine) { onFinish ->
-                tryJumpToByGoto(session, gotoLine.javaLine, onFinish)
-            }
+            jumpService.gotoJavaLine(gotoLine.javaLine)
             return false
         }
 
         val firstLine = jumpInfo.firstLine
         if (firstLine != null && line == firstLine.sourceLine - 1) {
-            project.runSynchronouslyWithProgress(goingToSelectedLine) { onFinish ->
-                tryJumpToByGoto(session, firstLine.javaLine, onFinish)
-            }
+            jumpService.gotoJavaLine(firstLine.javaLine)
             return false
         }
 
-        val selected = localAnalysisByRenderLine(line) ?: return false
-
-        when (selected.first.safeStatus) {
-            LineSafetyStatus.NotSafe -> {
-                val dialog = MessageDialog(project, "This jump could be potentially unsafe. Please, consider the risks. Do you want to continue?", "JumpToLine", arrayOf("Yes", "No"), 1, null, true)
-                dialog.show()
-                if (dialog.exitCode == 1) return false
-            }
-            LineSafetyStatus.UninitializedExist -> {
-                ToolWindowManager.getInstance(project).notifyByBalloon(
-                        ToolWindowId.DEBUG,
-                        MessageType.WARNING,
-                        "Some local variables were initialized to default values."
-                )
-            }
-            else -> {}
-        }
-
-        project.runSynchronouslyWithProgress("Jumping to the selected line...") { onFinish ->
-            tryJumpToSelectedLine(
-                    session = session,
-                    jumpAnalyzeTarget = selected.first,
-                    jumpAnalyzeAdditionalInfo = selected.second,
-                    classFile = jumpInfo.classFile,
-                    commonTypeResolver = commonTypeResolver,
-                    onFinish = onFinish
-            )
-        }
-
-        return true
+        return jumpService.tryJumpToLineImmediately(line)
     }
 
     companion object {
@@ -213,7 +180,7 @@ internal class JumpToLineArrowGutter(
 
     private fun updateHighlighters(highlightGoTo: Boolean) {
         if (highlighters != null && highlightGoTo == highlightersIsForGoto) return
-        if (inProgress) return
+        if (jumpService.loadIsInProgress) return
 
         highlightersIsForGoto = highlightGoTo
         resetHighlighters()
@@ -221,13 +188,7 @@ internal class JumpToLineArrowGutter(
         val lineCount = document?.lineCount ?: return
         val markupModel = markupModel ?: return
 
-        val currentJumpResult = currentJumpResult
-        if (currentJumpResult == null) {
-            loadJumpResult()
-            return
-        }
-
-        val currentJumpInfo = currentJumpResult as? JumpLinesInfo ?: return
+        val currentJumpInfo = jumpService.tryGetJumpInfoImmediately() ?: return
 
         synchronized(session) {
             if (highlighters != null) return
@@ -285,57 +246,12 @@ internal class JumpToLineArrowGutter(
         return if (highlighters == null) WaitCursor else DefaultCursor
     }
 
-    private fun localAnalysisByRenderLine(requestedLine: Int): Pair<JumpAnalyzeTarget, JumpAnalyzeAdditionalInfo>? {
-        val info = currentJumpResult as? JumpLinesInfo ?: return null
-        val analyzeResult = info.jumpAnalyzeResult ?: return null
-
-        val targetByLine = analyzeResult
-                .jumpAnalyzedTargets
-                .firstOrNull { target ->
-                    target.jumpTargetInfo.lines.any {
-                        line -> line.sourceLine == requestedLine + 1
-                    }
-                }
-                ?: return null
-
-        return targetByLine to analyzeResult.jumpAnalyzeAdditionalInfo
-    }
-
     fun reset() {
         resetHighlighters()
-        currentJumpResult = null
+        jumpService.reset()
         markupModelCached = null
         documentCached = null
         reSetterByMouseLeave.remove()
     }
 
-    private var inProgress = false
-
-    private var currentJumpResult: GetLinesToJumpResult? = null
-
-    private fun loadJumpResult() {
-        if (inProgress) return
-        if (currentJumpResult != null) return
-
-        synchronized(session) {
-            if (inProgress) return
-            if (currentJumpResult != null) return
-            inProgress = true
-        }
-
-        project.runSynchronouslyWithProgress("Analyzing the lines...") { onFinish ->
-            val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
-                synchronized(session) {
-                    currentJumpResult = result ?: UnknownErrorResult
-                    inProgress = false
-                    FUSLogger.log(
-                        event = FUSLogger.JumpToLineEvent.GetLinesToJump,
-                        status = if (result != null) JumpToLineStatus.Success else JumpToLineStatus.Success
-                    )
-                }
-                onFinish()
-            }
-            tryGetLinesToJump(session, myOnFinish)
-        }
-    }
 }

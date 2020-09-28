@@ -13,13 +13,12 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 
 class JumpToLineStartupActivity : StartupActivity {
     override fun runActivity(project: Project) {
-        //instrument()
 
         val debuggerListener = object : DebuggerManagerListener {
             override fun sessionAttached(session: DebuggerSession?) {
                  val xSession = session?.xDebugSession as? XDebugSessionImpl ?: return
-                val typeResolver = CommonTypeResolver(session.project)
-                val sessionHandler = JumpToLineSessionEvenHandler(session, xSession, typeResolver)
+                val jumpService = JumpService(session, CommonTypeResolver(session.project))
+                val sessionHandler = JumpToLineSessionEvenHandler(session, xSession, jumpService)
                 xSession.addSessionListener(sessionHandler)
             }
         }

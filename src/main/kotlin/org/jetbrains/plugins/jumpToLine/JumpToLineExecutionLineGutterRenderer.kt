@@ -18,7 +18,7 @@ internal class JumpToLineExecutionLineGutterRenderer(
     private val session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
     project: Project,
-    commonTypeResolver: CommonTypeResolver
+    jumpService: JumpService
 ) : GutterIconRenderer(), GutterMark {
 
     fun update() {
@@ -49,7 +49,7 @@ internal class JumpToLineExecutionLineGutterRenderer(
 
     override fun getTooltipText(): String? = canJump.second
 
-    private val gutter = JumpToLineArrowGutter(project, commonTypeResolver, session )
+    private val gutter = JumpToLineArrowGutter(project, session, jumpService)
 
     private var canJump: Pair<Boolean, String> = false to ""
 }

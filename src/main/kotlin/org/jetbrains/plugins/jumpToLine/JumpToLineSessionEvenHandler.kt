@@ -13,12 +13,12 @@ import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
 internal class JumpToLineSessionEvenHandler(
     session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
-    commonTypeResolver: CommonTypeResolver
+    jumpService: JumpService
 ) : XDebugSessionListener {
 
     private val project = session.project
 
-    private val renderer = JumpToLineExecutionLineGutterRenderer(session, xsession, project, commonTypeResolver)
+    private val renderer = JumpToLineExecutionLineGutterRenderer(session, xsession, project, jumpService)
     private val executionPointHighlighter = ExecutionPointHighlighter(project)
 
     override fun sessionPaused() {
