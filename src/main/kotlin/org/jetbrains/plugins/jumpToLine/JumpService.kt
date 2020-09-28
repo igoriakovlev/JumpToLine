@@ -6,16 +6,17 @@ import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
+import org.jetbrains.plugins.jumpToLine.injectionUtils.LineInfo
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.runSynchronouslyWithProgress
+import java.util.*
 
 
 internal class JumpService(
         private val session: DebuggerSession,
         private val commonTypeResolver: CommonTypeResolver
 ) {
-    var loadIsInProgress = false
-        private set
+    private var loadIsInProgress = false
 
     private var currentJumpResult: GetLinesToJumpResult? = null
 
@@ -26,15 +27,32 @@ internal class JumpService(
         }
     }
 
-    fun gotoJavaLine(javaLine: Int) {
+    private fun gotoLine(line: LineInfo): Boolean {
         session.project.runSynchronouslyWithProgress("Going to selected line...") { onFinish ->
-            tryJumpToByGoto(session, javaLine, onFinish)
+            tryJumpToByGoto(session, line.javaLine, onFinish)
         }
+        return true
     }
 
-    fun tryJumpToLineImmediately(jumpToLine: Int): Boolean {
+    fun tryGotoLine(sourceLine: Int): Boolean {
+        val jumpInfo = tryGetJumpInfo() ?: return false
 
-        val jumpInfo = tryGetJumpInfoImmediately() ?: return false
+        val gotoLine = jumpInfo.linesToGoto
+                .firstOrNull { it.sourceLine - 1 == sourceLine }
+                ?: return false
+
+        return gotoLine(gotoLine)
+    }
+
+    fun tryJumpToLine(sourceLine: Int): Boolean {
+
+        val jumpInfo = tryGetJumpInfo() ?: return false
+
+        val firstLine = jumpInfo.firstLine
+        if (firstLine != null && sourceLine == firstLine.sourceLine - 1) {
+            return gotoLine(firstLine)
+        }
+
         val analyzeResult = jumpInfo.jumpAnalyzeResult ?: return false
 
         val targetByLine = jumpInfo
@@ -42,7 +60,7 @@ internal class JumpService(
                 .jumpAnalyzedTargets
                 .firstOrNull { target ->
                     target.jumpTargetInfo.lines.any {
-                        line -> line.sourceLine == jumpToLine + 1
+                        line -> line.sourceLine == sourceLine + 1
                     }
                 }
                 ?: return false
@@ -51,7 +69,7 @@ internal class JumpService(
             LineSafetyStatus.NotSafe -> {
                 val dialog = MessageDialog(session.project, "This jump could be potentially unsafe. Please, consider the risks. Do you want to continue?", "JumpToLine", arrayOf("Yes", "No"), 1, null, true)
                 dialog.show()
-                if (dialog.exitCode == 1) return false
+                if (dialog.exitCode == 1) return true
             }
             LineSafetyStatus.UninitializedExist -> {
                 ToolWindowManager.getInstance(session.project).notifyByBalloon(
@@ -77,7 +95,7 @@ internal class JumpService(
         return true
     }
 
-    fun tryGetJumpInfoImmediately(): JumpLinesInfo? {
+    fun tryGetJumpInfo(): JumpLinesInfo? {
         if (loadIsInProgress) return null
         if (currentJumpResult != null) return currentJumpResult as? JumpLinesInfo
 
@@ -102,5 +120,15 @@ internal class JumpService(
             tryGetLinesToJump(session, myOnFinish)
         }
         return currentJumpResult
+    }
+
+    companion object {
+        private val servicesCollection = WeakHashMap<DebuggerSession, JumpService>()
+
+        fun getJumpService(session: DebuggerSession): JumpService = synchronized(servicesCollection) {
+            servicesCollection.getOrPut(session) {
+                JumpService(session, CommonTypeResolver(session.project))
+            }
+        }
     }
 }

@@ -16,8 +16,8 @@ class JumpToLineStartupActivity : StartupActivity {
 
         val debuggerListener = object : DebuggerManagerListener {
             override fun sessionAttached(session: DebuggerSession?) {
-                 val xSession = session?.xDebugSession as? XDebugSessionImpl ?: return
-                val jumpService = JumpService(session, CommonTypeResolver(session.project))
+                val xSession = session?.xDebugSession as? XDebugSessionImpl ?: return
+                val jumpService = JumpService.getJumpService(session)
                 val sessionHandler = JumpToLineSessionEvenHandler(session, xSession, jumpService)
                 xSession.addSessionListener(sessionHandler)
             }

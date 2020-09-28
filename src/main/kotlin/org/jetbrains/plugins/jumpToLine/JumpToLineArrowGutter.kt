@@ -19,7 +19,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
-import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
@@ -28,11 +27,8 @@ import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
-import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
-import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.onTrue
-import org.jetbrains.plugins.jumpToLine.injectionUtils.runSynchronouslyWithProgress
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -74,21 +70,8 @@ internal class JumpToLineArrowGutter(
         resetHighlighters()
         if (line == currentLine) return false
 
-        val jumpInfo = jumpService.tryGetJumpInfoImmediately() ?: return false
-
-        if (actionId == 1) {
-            val gotoLine = jumpInfo.linesToGoto.firstOrNull { it.sourceLine - 1 == line } ?: return false
-            jumpService.gotoJavaLine(gotoLine.javaLine)
-            return false
-        }
-
-        val firstLine = jumpInfo.firstLine
-        if (firstLine != null && line == firstLine.sourceLine - 1) {
-            jumpService.gotoJavaLine(firstLine.javaLine)
-            return false
-        }
-
-        return jumpService.tryJumpToLineImmediately(line)
+        return if (actionId == 1) !jumpService.tryGotoLine(line)
+        else !jumpService.tryJumpToLine(line)
     }
 
     companion object {
@@ -180,15 +163,14 @@ internal class JumpToLineArrowGutter(
 
     private fun updateHighlighters(highlightGoTo: Boolean) {
         if (highlighters != null && highlightGoTo == highlightersIsForGoto) return
-        if (jumpService.loadIsInProgress) return
-
+        
         highlightersIsForGoto = highlightGoTo
         resetHighlighters()
 
         val lineCount = document?.lineCount ?: return
         val markupModel = markupModel ?: return
 
-        val currentJumpInfo = jumpService.tryGetJumpInfoImmediately() ?: return
+        val currentJumpInfo = jumpService.tryGetJumpInfo() ?: return
 
         synchronized(session) {
             if (highlighters != null) return
