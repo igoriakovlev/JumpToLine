@@ -2,7 +2,6 @@ package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.ui.JavaDebuggerSupport
-import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.project.Project
@@ -69,13 +68,6 @@ private class DummyActionHandler : DebuggerActionHandler() {
 
 class JumpToStatementAction : XDebuggerActionBase(true) {
     
-    override fun update(event: AnActionEvent) {
-        super.update(event)
-        if (event.place == ActionPlaces.EDITOR_POPUP) {
-            event.presentation.text = "Skip to Here"
-        }
-    }
-
     override fun isEnabled(e: AnActionEvent?): Boolean {
         val project = e?.project ?: return false
         return XDebuggerManager.getInstance(project).currentSession?.isSuspended ?: false
