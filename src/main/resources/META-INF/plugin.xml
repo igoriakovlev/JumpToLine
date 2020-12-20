@@ -23,6 +23,7 @@
       <keyboard-shortcut first-keystroke="control alt shift F9" keymap="$default"/>
       <keyboard-shortcut first-keystroke="meta shift F10" keymap="Visual Studio OSX" replace-all="true"/>
       <add-to-group group-id="DebuggingActionsGroup" anchor="after" relative-to-action="ForceRunToCursor"/>
+      <add-to-group group-id="EditorPopupMenuDebug" anchor="after" relative-to-action="ForceRunToCursor"/>
     </action>
   </actions>
 
