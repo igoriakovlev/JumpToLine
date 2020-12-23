@@ -24,32 +24,44 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
             return false
 
         val xDebugSession = session as? XDebugSessionImpl ?: return false
-        val debugProcess = session.debugProcess as? JavaDebugProcess ?: return false
+        if (xDebugSession.debugProcess !is JavaDebugProcess) return false
 
         val position = XDebuggerUtilImpl.getCaretPosition(session.project, dataContext)
-        if (session.currentPosition?.line == position?.line) return false
 
-        return checkCanJump(debugProcess.debuggerSession, xDebugSession).first
+        val currentLine = session.currentPosition?.line ?: return false
+        val positionLine = position?.line ?: return false
+
+        if (currentLine == positionLine) return false
+
+        return true
     }
 
     override fun perform(session: XDebugSession, dataContext: DataContext) {
+        fun balloonError(errorText: String) {
+            ToolWindowManager.getInstance(session.project).notifyByBalloon(
+                ToolWindowId.DEBUG,
+                MessageType.ERROR,
+                errorText
+            )
+        }
+        fun balloonDefaultError() = balloonError("Failed to skip code.")
 
-        if (session !is XDebugSessionImpl) return
-        val debugProcess = session.debugProcess as? JavaDebugProcess ?: return
+
+        val xDebugSession = session as? XDebugSessionImpl ?: return balloonDefaultError()
+        val debugProcess = xDebugSession.debugProcess as? JavaDebugProcess ?: return balloonDefaultError()
 
         val position = XDebuggerUtilImpl.getCaretPosition(session.project, dataContext)
-        if (session.currentPosition?.line == position?.line) return
+
+        val currentLine = session.currentPosition?.line ?: return balloonDefaultError()
+        val positionLine = position?.line ?: return balloonDefaultError()
+
+        if (currentLine == positionLine) return balloonDefaultError()
+
+        val (canJump, error) = checkCanJump(debugProcess.debuggerSession, xDebugSession)
+        if (!canJump) return balloonError(error)
 
         val jumpService = JumpService.getJumpService(debugProcess.debuggerSession)
-        if (position != null) {
-            if (!jumpService.tryJumpToLine(position.line)) {
-                ToolWindowManager.getInstance(session.project).notifyByBalloon(
-                        ToolWindowId.DEBUG,
-                        MessageType.ERROR,
-                        "Failed to skip code. Inappropriate line for jump."
-                )
-            }
-        }
+        if (!jumpService.tryJumpToLine(position.line)) return balloonDefaultError()
     }
 }
 
