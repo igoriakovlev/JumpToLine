@@ -5,7 +5,6 @@
 
 package org.jetbrains.plugins.jumpToLine.injectionUtils
 
-import com.jetbrains.rd.util.getOrCreate
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Label
 import org.objectweb.asm.Opcodes
@@ -212,7 +211,7 @@ internal class LocalVariableAnalyzer private constructor(
     private fun processLocalRead(index: Int) {
         val storeIndex = localVariablesStoreIndexes[index] ?: 0
         val regionsList =
-                localVariablesAccessRegions.getOrCreate(index) { mutableListOf() }
+                localVariablesAccessRegions.getOrPut(index) { mutableListOf() }
 
         regionsList.add(AccessRange(storeIndex, instructionIndex))
     }
@@ -220,7 +219,7 @@ internal class LocalVariableAnalyzer private constructor(
     private fun processLocalJump(index: Int, label: Label) {
         val storeIndex = localVariablesStoreIndexes[index] ?: 0
         val regionsList =
-                localVariablesJumpAccessRegions.getOrCreate(index) { mutableListOf() }
+                localVariablesJumpAccessRegions.getOrPut(index) { mutableListOf() }
 
         regionsList.add(AccessJumpRange(storeIndex, instructionIndex, label))
     }
@@ -269,7 +268,7 @@ internal class LocalVariableAnalyzer private constructor(
 
     override fun visitLocalVariable(name: String, descriptor: String, signature: String?, start: Label, end: Label, index: Int) {
         super.visitLocalVariable(name, descriptor, signature, start, end, index)
-        localVariablesWithRanges.getOrCreate(index) { mutableListOf() }.add(UserVisibleLocal(name, descriptor, signature, start, end, index))
+        localVariablesWithRanges.getOrPut(index) { mutableListOf() }.add(UserVisibleLocal(name, descriptor, signature, start, end, index))
     }
 
     override fun visitLabel(label: Label) {
