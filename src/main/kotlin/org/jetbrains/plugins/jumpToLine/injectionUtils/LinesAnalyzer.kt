@@ -25,7 +25,7 @@ internal data class LinesAnalyzerResult(
 )
 
 internal class LinesAnalyzer private constructor(
-        private val lineTranslator: LineTranslator?,
+        private val lineTranslator: LineTranslator,
         private val addFirstLine: Boolean,
         private val jumpFromJavaLine: Int) : SingleMethodAnalyzer() {
 
@@ -57,7 +57,7 @@ internal class LinesAnalyzer private constructor(
         }
 
         if (!linesVisited.add(line)) return
-        val sourceLine = (if (lineTranslator != null) lineTranslator.translate(line) else line) ?: return
+        val sourceLine = lineTranslator.translate(line) ?: return
         val lineInfo = LineInfo(line, sourceLine)
 
         linesFound[instructionIndex]?.run {
@@ -79,7 +79,7 @@ internal class LinesAnalyzer private constructor(
                 classReader: ClassReader,
                 methodName: MethodName,
                 ownerTypeName: String,
-                lineTranslator: LineTranslator?,
+                lineTranslator: LineTranslator,
                 jumpFromJavaLine: Int,
                 addFirstLine: Boolean
         ): LinesAnalyzerResult? {

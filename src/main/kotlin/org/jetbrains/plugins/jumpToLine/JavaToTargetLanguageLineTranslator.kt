@@ -7,4 +7,9 @@ package org.jetbrains.plugins.jumpToLine
 
 internal interface LineTranslator {
     fun translate(line: Int): Int?
+    companion object {
+        val DEFAULT: LineTranslator = object : LineTranslator {
+            override fun translate(line: Int): Int? = line
+        }
+    }
 }

@@ -116,12 +116,14 @@ private class StrataViaLocationTranslator(
 ): LineTranslator {
 
     private val sourceNameJava = currentLocation.sourceName("Java")
+    private val sourceNameStratum = currentLocation.sourceName(actualStratum)
     private val method = currentLocation.method()
 
     override fun translate(line: Int): Int? {
         return method
                 .locationsOfLine("Java", sourceNameJava, line)
                 .firstOrNull()
+                ?.takeIf { it.sourceName(actualStratum) == sourceNameStratum }
                 ?.lineNumber(actualStratum)
     }
 }
@@ -148,14 +150,20 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
     //create line translator for Kotlin if able
     val lineTranslator = classType.availableStrata()?.let {
         if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
-    }
+    } ?: LineTranslator.DEFAULT
 
-    val linesToGoto = method.allLineLocations()
+    val javaLines = method.allLineLocations()
             .map { it.lineNumber("Java") }
             .distinct()
-            .map { LineInfo(it, lineTranslator?.translate(it) ?: it ) }
 
-    val firstLine = linesToGoto.minByOrNull { it.javaLine }
+    val linesToGoto = javaLines.mapNotNull { javaLine ->
+                lineTranslator.translate(javaLine)?.let {
+                    LineInfo(javaLine, it)
+                }
+            }
+
+    val firstJavaLine = javaLines.minBy { it }
+    val firstLine = linesToGoto.firstOrNull { it.javaLine == firstJavaLine }
 
     val jumpOnLineAvailable = !method.isConstructor &&
             !checkIsTopMethodRecursive(location, threadProxy) &&
@@ -177,7 +185,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
                     lineTranslator = lineTranslator,
                     klass = klass,
                     jumpFromJavaLine = jumpFromLine,
-                    analyzeFirstLine = false //We skip the first line because it is not need to analyze for jump
+                    analyzeFirstLine = firstLine == null //When first line is not known for fast jump maybe it can be available for binary jump
             ) ?: nullWithLog<JumpAnalyzeResult>("Cannot get available goto lines")
             onFinish(JumpLinesInfo(analyzeResult, klass, linesToGoto, firstLine))
         }

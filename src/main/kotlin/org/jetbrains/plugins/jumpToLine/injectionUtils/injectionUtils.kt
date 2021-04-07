@@ -49,7 +49,7 @@ internal fun DebugProcessImpl.resumeBreakpoints() {
 internal fun getAvailableJumpLines(
         ownerTypeName: String,
         targetMethod: MethodName,
-        lineTranslator: LineTranslator?,
+        lineTranslator: LineTranslator,
         klass: ByteArray,
         jumpFromJavaLine: Int,
         analyzeFirstLine: Boolean
