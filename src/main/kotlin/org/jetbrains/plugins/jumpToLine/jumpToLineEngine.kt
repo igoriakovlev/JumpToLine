@@ -82,7 +82,7 @@ private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionIm
     if (method.name() == "invokeSuspend" && method.signature() == "(Ljava/lang/Object;)Ljava/lang/Object;")
         return false to COROUTINE_SUSPECTED
 
-    if (method.location().lineNumber() == -1) return false to METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE
+    if (method.location().lineNumber("Java") == -1) return false to METHOD_IS_HAVE_NOT_DEBUG_INFO_OR_NATIVE
 
     return true to AVAILABLE
 }
@@ -142,7 +142,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
     val method = location.method()
     val classType = location.declaringType() as? ClassType ?: return onFinish(nullWithLog("Invalid type to jump"))
 
-    val jumpFromLine = location.lineNumber()
+    val jumpFromLine = location.lineNumber("Java")
     if (jumpFromLine == -1) return onFinish(nullWithLog("Invalid line to jump -1"))
 
     //create line translator for Kotlin if able
@@ -155,7 +155,7 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
             .distinct()
             .map { LineInfo(it, lineTranslator?.translate(it) ?: it ) }
 
-    val firstLine = linesToGoto.minBy { it.javaLine }
+    val firstLine = linesToGoto.minByOrNull { it.javaLine }
 
     val jumpOnLineAvailable = !method.isConstructor &&
             !checkIsTopMethodRecursive(location, threadProxy) &&
