@@ -17,6 +17,13 @@
     &lt;img src="https://plugins.jetbrains.com/files/14877/screenshot_22984.png" height="150" width="375" /&gt;
   </description>
 
+  <change-notes><![CDATA[
+  <p><h2>0.4.5</h2></p>
+  <p>Update supported IDEA version to 212</p>
+  <p>Fixed support for Kotlin code that built with additional debug info</p>
+  <p>Fixed invalid jumps within Kotlin inlined methods or methods with inlined code</p>
+  ]]></change-notes>
+
   <actions>
     <action id="JumpToStatement" class="org.jetbrains.plugins.jumpToLine.JumpToStatementAction"
             text="Skip to Cursor" icon="/org/jetbrains/plugins/jumpToLine/setNextStatement.svg">
