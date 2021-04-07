@@ -6,7 +6,7 @@
 
   <depends>com.intellij.modules.lang</depends>
   <depends>com.intellij.modules.java</depends>
-  <idea-version since-build="201.3803.71"/>
+  <idea-version since-build="201.6668.113"/>
 
   <description>
     &lt;p&gt;The Jump to Line plugin allows you to get to any line of code while debugging. Drag and drop a yellow arrow to the desired place in the gutter, and it will put an execution point there. In contrast to stepping, the plugin enables you to start running your program from that point without executing the preceding code.
