@@ -20,6 +20,7 @@ import com.sun.jdi.Method
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineEvent.*
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
+import java.io.File
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
     var result: T? = null
@@ -149,7 +150,15 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
 
     //create line translator for Kotlin if able
     val lineTranslator = classType.availableStrata()?.let {
-        if (it.size == 2 && it.contains("Kotlin")) StrataViaLocationTranslator(location, "Kotlin") else null
+        when {
+            it.contains("Kotlin") -> {
+                StrataViaLocationTranslator(location, "Kotlin")
+            }
+            it.contains("KotlinDebug") -> {
+                StrataViaLocationTranslator(location, "KotlinDebug")
+            }
+            else -> null
+        }
     } ?: LineTranslator.DEFAULT
 
     val javaLines = method.allLineLocations()
