@@ -1,4 +1,4 @@
-<idea-plugin>
+<idea-plugin require-restart="false">
   <id>org.jetbrains.jumpToLine</id>
   <name>Jump to Line</name>
   <version>0.1.6</version>
