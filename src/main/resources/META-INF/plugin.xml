@@ -18,7 +18,13 @@
   </description>
 
   <change-notes><![CDATA[
-  <p><h2>0.4.5</h2></p>
+  <p><h2>0.1.6</h2></p>
+  <p>Fixed false positive messaging about uninitialized variables</p>
+  <p>Fixed exceptions about highlight of invalid lines</p>
+  <p>More advanced way to jump on lines associated with many instructions offsets</p>
+  <p>Updated arrow icons</p>
+  <p>Enable plugin option for non-restart mode</p>
+  <p><h2>0.1.5</h2></p>
   <p>Update supported IDEA version to 212</p>
   <p>Fixed support for Kotlin code that built with additional debug info</p>
   <p>Fixed invalid jumps within Kotlin inlined methods or methods with inlined code</p>
