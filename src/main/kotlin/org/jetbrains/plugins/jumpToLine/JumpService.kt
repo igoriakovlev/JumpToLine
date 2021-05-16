@@ -6,7 +6,6 @@ import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
-import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 import org.jetbrains.plugins.jumpToLine.injectionUtils.JumpAnalyzeTarget
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineInfo
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
@@ -40,7 +39,7 @@ internal class JumpService(
         val jumpInfo = tryGetJumpInfo() ?: return false
 
         val gotoLine = jumpInfo.linesToGoto
-                .firstOrNull { it.sourceLine - 1 == sourceLine }
+                .firstOrNull { it.sourceLine == sourceLine }
                 ?: return false
 
         return gotoLine(gotoLine)
@@ -51,7 +50,7 @@ internal class JumpService(
         val jumpInfo = tryGetJumpInfo() ?: return false
 
         val firstLine = jumpInfo.firstLine
-        if (firstLine != null && sourceLine == firstLine.sourceLine - 1) {
+        if (firstLine != null && sourceLine == firstLine.sourceLine) {
             return gotoLine(firstLine)
         }
 
@@ -60,11 +59,7 @@ internal class JumpService(
         val targetsByLine = jumpInfo
                 .jumpAnalyzeResult
                 .jumpAnalyzedTargets
-                .filter { target ->
-                    target.jumpTargetInfo.lines.any {
-                        line -> line.sourceLine == sourceLine + 1
-                    }
-                }
+                .filter { it.jumpTargetInfo.lines.any { line -> line.sourceLine == sourceLine } }
 
         fun JumpAnalyzeTarget.isBetterThan(other: JumpAnalyzeTarget) = when {
             safeStatus < other.safeStatus -> true

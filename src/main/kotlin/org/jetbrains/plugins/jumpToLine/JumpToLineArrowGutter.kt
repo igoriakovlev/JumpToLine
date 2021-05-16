@@ -27,6 +27,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
+import org.jetbrains.plugins.jumpToLine.injectionUtils.LineInfo
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.onTrue
 import java.awt.Color
@@ -62,16 +63,18 @@ internal class JumpToLineArrowGutter(
         return markupModelCached
     }
 
-    private val currentLine get() = session.xDebugSession?.currentPosition?.line
+    private val currentDocumentLine get() = session.xDebugSession?.currentPosition?.line
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
 
         reSetterByMouseLeave.remove()
         resetHighlighters()
-        if (line == currentLine) return false
+        if (line == currentDocumentLine) return false
 
-        return if (actionId == 1) !jumpService.tryGotoLine(line)
-        else !jumpService.tryJumpToLine(line)
+        val sourceLine = line + 1
+
+        return if (actionId == 1) !jumpService.tryGotoLine(sourceLine)
+        else !jumpService.tryJumpToLine(sourceLine)
     }
 
     companion object {
@@ -110,8 +113,10 @@ internal class JumpToLineArrowGutter(
         }
     }
 
-    private fun MarkupModel.isValidLine(line: Int) =
-        line >= 0 && line < document.lineCount && line != currentLine
+    private fun MarkupModel.isValidLine(line: LineInfo) =
+        line.documentLine.let { it >= 0 && it < document.lineCount && it != currentDocumentLine }
+
+    private val LineInfo.documentLine get() = sourceLine - 1
 
     private fun updateHighlightersForJump(
         currentJumpInfo: JumpLinesInfo,
@@ -132,17 +137,14 @@ internal class JumpToLineArrowGutter(
                 for (currentSourceLine in currentInfo.jumpTargetInfo.lines) {
 
                     if (firstLine != null && firstLine.sourceLine == currentSourceLine.sourceLine) continue
+                    if (!markupModel.isValidLine(currentSourceLine)) continue
 
-                    val lineToSet = currentSourceLine.sourceLine - 1
-                    if (!markupModel.isValidLine(lineToSet)) continue
-
-                    val currentBestStatus = lineToBestStatus[lineToSet]
+                    val currentBestStatus = lineToBestStatus[currentSourceLine.documentLine]
                     if (currentBestStatus == null || currentBestStatus > currentInfo.safeStatus) {
-                        lineToBestStatus[lineToSet] = currentInfo.safeStatus
+                        lineToBestStatus[currentSourceLine.documentLine] = currentInfo.safeStatus
                     }
                 }
             }
-
 
             for (currentLineToStatus in lineToBestStatus) {
                 val (lineToSet, currentSafeStatus) = currentLineToStatus
@@ -165,22 +167,22 @@ internal class JumpToLineArrowGutter(
         }
 
         if (firstLine != null) {
-            val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.sourceLine - 1, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-            jumpHighlighters.add(firstLineHighlighter)
+            jumpHighlighters.add(
+                markupModel.addLineHighlighter(firstLine.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+            )
         }
 
         return jumpHighlighters
     }
 
-    private fun updateHighlightersForGoTo(currentJumpInfo: JumpLinesInfo,
-                                          markupModel: MarkupModel): List<RangeHighlighter>? {
-        return currentJumpInfo.linesToGoto.mapNotNull { line ->
-            val lineToSet = line.sourceLine - 1
-            markupModel.isValidLine(lineToSet).onTrue {
-                markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+    private fun updateHighlightersForGoTo(
+        currentJumpInfo: JumpLinesInfo,
+        markupModel: MarkupModel
+    ): List<RangeHighlighter> = currentJumpInfo.linesToGoto.mapNotNull { line ->
+            markupModel.isValidLine(line).onTrue {
+                markupModel.addLineHighlighter(line.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
             }
         }
-    }
 
     private fun updateHighlighters(highlightGoTo: Boolean) {
         if (highlighters != null && highlightGoTo == highlightersIsForGoto) return

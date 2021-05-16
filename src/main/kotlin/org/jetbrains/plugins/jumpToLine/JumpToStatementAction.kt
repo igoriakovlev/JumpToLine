@@ -61,7 +61,8 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
         if (!canJump) return balloonError(error)
 
         val jumpService = JumpService.getJumpService(debugProcess.debuggerSession)
-        if (!jumpService.tryJumpToLine(position.line)) return balloonDefaultError()
+        val sourceLine = position.line + 1
+        if (!jumpService.tryJumpToLine(sourceLine)) return balloonDefaultError()
     }
 }
 
