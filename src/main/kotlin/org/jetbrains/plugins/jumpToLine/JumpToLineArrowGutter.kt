@@ -28,6 +28,7 @@ import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
+import org.jetbrains.plugins.jumpToLine.injectionUtils.onTrue
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -109,9 +110,13 @@ internal class JumpToLineArrowGutter(
         }
     }
 
-    private fun updateHighlightersForJump(currentJumpInfo: JumpLinesInfo,
-                                          markupModel: MarkupModel,
-                                          lineCount: Int): List<RangeHighlighter>? {
+    private fun MarkupModel.isValidLine(line: Int) =
+        line >= 0 && line < document.lineCount && line != currentLine
+
+    private fun updateHighlightersForJump(
+        currentJumpInfo: JumpLinesInfo,
+        markupModel: MarkupModel
+    ): List<RangeHighlighter>? {
 
         val jumpAnalyzeInfo = currentJumpInfo.jumpAnalyzeResult
         val firstLine = currentJumpInfo.firstLine
@@ -125,8 +130,11 @@ internal class JumpToLineArrowGutter(
 
             for (currentInfo in jumpAnalyzeInfo.jumpAnalyzedTargets) {
                 for (currentSourceLine in currentInfo.jumpTargetInfo.lines) {
+
+                    if (firstLine != null && firstLine.sourceLine == currentSourceLine.sourceLine) continue
+
                     val lineToSet = currentSourceLine.sourceLine - 1
-                    if (lineToSet > lineCount || lineToSet == currentLine) continue
+                    if (!markupModel.isValidLine(lineToSet)) continue
 
                     val currentBestStatus = lineToBestStatus[lineToSet]
                     if (currentBestStatus == null || currentBestStatus > currentInfo.safeStatus) {
@@ -165,13 +173,12 @@ internal class JumpToLineArrowGutter(
     }
 
     private fun updateHighlightersForGoTo(currentJumpInfo: JumpLinesInfo,
-                                          markupModel: MarkupModel,
-                                          lineCount: Int): List<RangeHighlighter>? {
+                                          markupModel: MarkupModel): List<RangeHighlighter>? {
         return currentJumpInfo.linesToGoto.mapNotNull { line ->
             val lineToSet = line.sourceLine - 1
-            if (lineToSet <= lineCount && lineToSet != currentLine) {
+            markupModel.isValidLine(lineToSet).onTrue {
                 markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-            } else null
+            }
         }
     }
 
@@ -181,15 +188,13 @@ internal class JumpToLineArrowGutter(
         highlightersIsForGoto = highlightGoTo
         resetHighlighters()
 
-        val lineCount = document?.lineCount ?: return
         val markupModel = markupModel ?: return
-
         val currentJumpInfo = jumpService.tryGetJumpInfo() ?: return
 
         synchronized(session) {
             if (highlighters != null) return
-            highlighters = if (highlightersIsForGoto) updateHighlightersForGoTo(currentJumpInfo, markupModel, lineCount)
-            else updateHighlightersForJump(currentJumpInfo, markupModel, lineCount)
+            highlighters = if (highlightersIsForGoto) updateHighlightersForGoTo(currentJumpInfo, markupModel)
+            else updateHighlightersForJump(currentJumpInfo, markupModel)
 
             if (highlighters != null) {
                 reSetterByMouseLeave.install()
