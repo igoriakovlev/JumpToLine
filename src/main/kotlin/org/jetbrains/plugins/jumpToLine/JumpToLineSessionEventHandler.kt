@@ -10,7 +10,7 @@ import com.intellij.xdebugger.XDebugSessionListener
 import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
 
-internal class JumpToLineSessionEvenHandler(
+internal class JumpToLineSessionEventHandler(
     session: DebuggerSession,
     private val xsession: XDebugSessionImpl,
     jumpService: JumpService

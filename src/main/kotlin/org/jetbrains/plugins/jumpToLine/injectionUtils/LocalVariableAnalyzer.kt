@@ -19,8 +19,8 @@ internal data class UserVisibleLocal(val name: String, val descriptor: String, v
 
 internal enum class LineSafetyStatus {
     Safe,
-    NotSafe,
-    UninitializedExist
+    UninitializedExist,
+    NotSafe
 }
 
 internal data class JumpAnalyzeTarget(
@@ -29,8 +29,6 @@ internal data class JumpAnalyzeTarget(
         val localsFrame: LocalsFrame,
         val safeStatus: LineSafetyStatus
 )
-
-
 
 internal data class JumpAnalyzeAdditionalInfo(
         val fistLocalsFrame: LocalsFrame,
@@ -87,13 +85,15 @@ internal class LocalVariableAnalyzer private constructor(
             val lastIndex = labelToIndex[it.end]
 
             if (firstIndex != null && lastIndex != null) {
-                val canBeSaved = linesAnalyzerResult
-                        .jumpFromJavaLineIndexes.all { index -> index in firstIndex..lastIndex }
-
                 val canBeRestored = onIndex in firstIndex..lastIndex
+                if (canBeRestored) {
+                    val canBeSaved = linesAnalyzerResult
+                        .jumpFromJavaLineIndexes
+                        .all { index -> index in firstIndex..lastIndex }
+                    if (canBeSaved) return SaveRestoreStatus.CanBeSavedAndRestored
 
-                if (canBeSaved && canBeRestored) return SaveRestoreStatus.CanBeSavedAndRestored
-                if (canBeRestored) resultStatus = SaveRestoreStatus.CanBeRestored
+                    resultStatus = SaveRestoreStatus.CanBeRestored
+                }
             }
         }
 
@@ -101,7 +101,7 @@ internal class LocalVariableAnalyzer private constructor(
     }
 
     private class LazyMutableSet {
-        val mutableSet: MutableSet<Long> by lazy { mutableSetOf<Long>() }
+        val mutableSet: MutableSet<Long> by lazy { mutableSetOf() }
     }
 
     private fun isLocalAccessible(local: Int, onIndex: Long): Boolean =
@@ -149,7 +149,9 @@ internal class LocalVariableAnalyzer private constructor(
             }
 
             val allVariablesSavedAndRestored = allVariablesIsSafe && localsDescriptors.all {
-                local -> local.saveRestoreStatus == SaveRestoreStatus.CanBeSavedAndRestored || local.saveRestoreStatus == SaveRestoreStatus.IsParameter
+                //Not need to restore Parameters
+                //Not need to restore None because it is not accessible
+                it.saveRestoreStatus != SaveRestoreStatus.CanBeRestored
             }
 
             val safeStatus = if (allVariablesIsSafe) {

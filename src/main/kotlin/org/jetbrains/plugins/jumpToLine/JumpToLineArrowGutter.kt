@@ -28,7 +28,6 @@ import com.intellij.ui.JBColor
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
-import org.jetbrains.plugins.jumpToLine.injectionUtils.onTrue
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.event.MouseEvent
@@ -119,20 +118,35 @@ internal class JumpToLineArrowGutter(
         if (jumpAnalyzeInfo == null && firstLine == null) return null
 
         val jumpHighlighters = mutableListOf<RangeHighlighter>()
-
         var yellowLineAdded = false
-        jumpAnalyzeInfo?.jumpAnalyzedTargets?.forEach { info ->
-            info.jumpTargetInfo.lines.forEach { line ->
-                val lineToSet = line.sourceLine - 1
-                (lineToSet <= lineCount && lineToSet != currentLine).onTrue {
-                    val attributes = if (info.safeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsafeLineAttribute
-                    yellowLineAdded = yellowLineAdded || info.safeStatus == LineSafetyStatus.NotSafe
 
-                    val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                    jumpHighlighters.add(highlighter)
+        if (jumpAnalyzeInfo != null) {
+            val lineToBestStatus = mutableMapOf<Int, LineSafetyStatus>()
+
+            for (currentInfo in jumpAnalyzeInfo.jumpAnalyzedTargets) {
+                for (currentSourceLine in currentInfo.jumpTargetInfo.lines) {
+                    val lineToSet = currentSourceLine.sourceLine - 1
+                    if (lineToSet > lineCount || lineToSet == currentLine) continue
+
+                    val currentBestStatus = lineToBestStatus[lineToSet]
+                    if (currentBestStatus == null || currentBestStatus > currentInfo.safeStatus) {
+                        lineToBestStatus[lineToSet] = currentInfo.safeStatus
+                    }
                 }
             }
+
+
+            for (currentLineToStatus in lineToBestStatus) {
+                val (lineToSet, currentSafeStatus) = currentLineToStatus
+
+                val attributes = if (currentSafeStatus != LineSafetyStatus.NotSafe) safeLineAttribute else unsafeLineAttribute
+                yellowLineAdded = yellowLineAdded || currentSafeStatus == LineSafetyStatus.NotSafe
+
+                val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
+                jumpHighlighters.add(highlighter)
+            }
         }
+
 
         if (jumpHighlighters.size == 0 || yellowLineAdded) {
             ToolWindowManager.getInstance(project).notifyByBalloon(

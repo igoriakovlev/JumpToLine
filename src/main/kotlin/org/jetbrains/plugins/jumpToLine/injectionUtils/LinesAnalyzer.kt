@@ -34,7 +34,6 @@ internal class LinesAnalyzer private constructor(
     )
 
     private val linesFound = mutableMapOf<Long, SemiJumpTargetInfo>()
-    private val linesVisited = mutableSetOf<Int>()
     private var jumpFromJavaLineIndexes: MutableSet<Long>? = null
     private val frameIndexes = mutableSetOf<Long>()
     private var firstLineVisited = false
@@ -56,7 +55,6 @@ internal class LinesAnalyzer private constructor(
             }
         }
 
-        if (!linesVisited.add(line)) return
         val sourceLine = lineTranslator.translate(line) ?: return
         val lineInfo = LineInfo(line, sourceLine)
 
