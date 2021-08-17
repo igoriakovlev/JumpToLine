@@ -18,6 +18,8 @@
   </description>
 
   <change-notes><![CDATA[
+  <p><h2>0.1.7</h2></p>
+  <p>Update until version to any idea</p>
   <p><h2>0.1.6</h2></p>
   <p>Fixed false positive messaging about uninitialized variables</p>
   <p>Fixed exceptions about highlight of invalid lines</p>
