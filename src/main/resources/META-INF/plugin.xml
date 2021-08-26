@@ -1,7 +1,7 @@
 <idea-plugin require-restart="false">
   <id>org.jetbrains.jumpToLine</id>
   <name>Jump to Line</name>
-  <version>0.1.7</version>
+  <version>0.1.8</version>
   <vendor email="igor.yakovlev@jetbrains.com" url="jetbrains.com">JetBrains</vendor>
 
   <depends>com.intellij.modules.lang</depends>
