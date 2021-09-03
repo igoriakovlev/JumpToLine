@@ -20,7 +20,6 @@ import com.sun.jdi.Method
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
 import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineEvent.*
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
-import java.io.File
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
     var result: T? = null
@@ -38,8 +37,8 @@ private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T
 
 internal val Method.methodName get() = MethodName(name(), signature(), genericSignature())
 
-internal fun checkCanJump(session: DebuggerSession, xsession: XDebugSessionImpl) =
-        runInDebuggerThread(session) { checkCanJumpImpl(session, xsession) } ?: false to UNKNOWN_ERROR0
+internal fun checkCanJump(session: DebuggerSession) =
+        runInDebuggerThread(session) { checkCanJumpImpl(session) } ?: false to UNKNOWN_ERROR0
 
 private const val NOT_SUSPENDED = "Process is not suspended"
 private const val MAIN_FUNCTION_CALL = "Jump to line is not available for the main function"
@@ -51,16 +50,18 @@ private const val NOT_ALL_THREADS_ARE_SUSPENDED = "Jump to line is available onl
 private const val UNKNOWN_ERROR0 = "Unexpected jump error (#0)"
 private const val UNKNOWN_ERROR1 = "Unexpected jump error (#1)"
 private const val UNKNOWN_ERROR2 = "Unexpected jump error (#2)"
+private const val UNKNOWN_ERROR3 = "Unexpected jump error (#3)"
 
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
-private fun checkCanJumpImpl(session: DebuggerSession, xsession: XDebugSessionImpl): Pair<Boolean, String> {
+private fun checkCanJumpImpl(session: DebuggerSession): Pair<Boolean, String> {
     val process = session.process
+    val xSession = session.xDebugSession as? XDebugSessionImpl ?: return false to UNKNOWN_ERROR3
 
-    if (!xsession.isSuspended)
+    if (!xSession.isSuspended)
         return false to NOT_SUSPENDED
 
-    if (!xsession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
+    if (!xSession.isTopFrameSelected) return false to TOP_FRAME_NOT_SELECTED
 
     if (!process.virtualMachineProxy.isSuspended)
         return false to NOT_SUSPENDED

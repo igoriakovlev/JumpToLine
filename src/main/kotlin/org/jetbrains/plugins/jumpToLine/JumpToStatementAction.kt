@@ -46,9 +46,7 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
         }
         fun balloonDefaultError() = balloonError("Failed to skip code.")
 
-
-        val xDebugSession = session as? XDebugSessionImpl ?: return balloonDefaultError()
-        val debugProcess = xDebugSession.debugProcess as? JavaDebugProcess ?: return balloonDefaultError()
+        val debugProcess = session.debugProcess as? JavaDebugProcess ?: return balloonDefaultError()
 
         val position = XDebuggerUtilImpl.getCaretPosition(session.project, dataContext)
 
@@ -57,12 +55,12 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
 
         if (currentLine == positionLine) return balloonDefaultError()
 
-        val (canJump, error) = checkCanJump(debugProcess.debuggerSession, xDebugSession)
+        val (canJump, error) = checkCanJump(debugProcess.debuggerSession)
         if (!canJump) return balloonError(error)
 
-        val jumpService = JumpService.getJumpService(debugProcess.debuggerSession)
+        val jumpService = JumpService.getJumpService(session.project)
         val sourceLine = position.line + 1
-        if (!jumpService.tryJumpToLine(sourceLine)) return balloonDefaultError()
+        if (!jumpService.tryJumpToLine(sourceLine, debugProcess.debuggerSession)) return balloonDefaultError()
     }
 }
 

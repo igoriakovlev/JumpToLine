@@ -1,6 +1,7 @@
 package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.impl.DebuggerSession
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.wm.ToolWindowId
@@ -12,46 +13,51 @@ import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
 import org.jetbrains.plugins.jumpToLine.injectionUtils.runSynchronouslyWithProgress
 import java.util.*
 
+internal class JumpService(private val commonTypeResolver: CommonTypeResolver) {
 
-internal class JumpService(
-        private val session: DebuggerSession,
-        private val commonTypeResolver: CommonTypeResolver
-) {
-    private var loadIsInProgress = false
+    private class ServiceState {
+        val sync = Any()
+        var loadIsInProgress = false
+        var currentJumpResult: GetLinesToJumpResult? = null
+    }
+    private val sessionToStateMap = WeakHashMap<DebuggerSession, ServiceState>()
+    private val DebuggerSession.sessionState: ServiceState get() = synchronized(sessionToStateMap) {
+        sessionToStateMap.getOrPut(this) { ServiceState() }
+    }
 
-    private var currentJumpResult: GetLinesToJumpResult? = null
-
-    fun reset() {
-        synchronized(session) {
-            loadIsInProgress = false
-            currentJumpResult = null
+    fun reset(session: DebuggerSession) {
+        with(session.sessionState) {
+            synchronized(sync) {
+                loadIsInProgress = false
+                currentJumpResult = null
+            }
         }
     }
 
-    private fun gotoLine(line: LineInfo): Boolean {
+    private fun gotoLine(line: LineInfo, session: DebuggerSession): Boolean {
         session.project.runSynchronouslyWithProgress("Going to selected line...") { onFinish ->
             tryJumpToByGoto(session, line.javaLine, onFinish)
         }
         return true
     }
 
-    fun tryGotoLine(sourceLine: Int): Boolean {
-        val jumpInfo = tryGetJumpInfo() ?: return false
+    fun tryGotoLine(sourceLine: Int, session: DebuggerSession): Boolean {
+        val jumpInfo = tryGetJumpInfo(session) ?: return false
 
         val gotoLine = jumpInfo.linesToGoto
                 .firstOrNull { it.sourceLine == sourceLine }
                 ?: return false
 
-        return gotoLine(gotoLine)
+        return gotoLine(gotoLine, session)
     }
 
-    fun tryJumpToLine(sourceLine: Int): Boolean {
+    fun tryJumpToLine(sourceLine: Int, session: DebuggerSession): Boolean {
 
-        val jumpInfo = tryGetJumpInfo() ?: return false
+        val jumpInfo = tryGetJumpInfo(session) ?: return false
 
         val firstLine = jumpInfo.firstLine
         if (firstLine != null && sourceLine == firstLine.sourceLine) {
-            return gotoLine(firstLine)
+            return gotoLine(firstLine, session)
         }
 
         val analyzeResult = jumpInfo.jumpAnalyzeResult ?: return false
@@ -104,39 +110,41 @@ internal class JumpService(
         return true
     }
 
-    fun tryGetJumpInfo(): JumpLinesInfo? {
-        if (loadIsInProgress) return null
-        if (currentJumpResult != null) return currentJumpResult as? JumpLinesInfo
-
-        synchronized(session) {
+    fun tryGetJumpInfo(session: DebuggerSession): JumpLinesInfo? {
+        with(session.sessionState) {
             if (loadIsInProgress) return null
             if (currentJumpResult != null) return currentJumpResult as? JumpLinesInfo
-            loadIsInProgress = true
-        }
 
-        session.project.runSynchronouslyWithProgress("Analyzing the lines...") { onFinish ->
-            val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
-                synchronized(session) {
-                    currentJumpResult = result ?: UnknownErrorResult
-                    loadIsInProgress = false
-                    FUSLogger.log(
+            synchronized(sync) {
+                if (loadIsInProgress) return null
+                if (currentJumpResult != null) return currentJumpResult as? JumpLinesInfo
+                loadIsInProgress = true
+            }
+
+            session.project.runSynchronouslyWithProgress("Analyzing the lines...") { onFinish ->
+                val myOnFinish: (GetLinesToJumpResult?) -> Unit = { result ->
+                    synchronized(sync) {
+                        currentJumpResult = result ?: UnknownErrorResult
+                        loadIsInProgress = false
+                        FUSLogger.log(
                             event = FUSLogger.JumpToLineEvent.GetLinesToJump,
                             status = if (result != null) FUSLogger.JumpToLineStatus.Success else FUSLogger.JumpToLineStatus.Success
-                    )
+                        )
+                    }
+                    onFinish()
                 }
-                onFinish()
+                tryGetLinesToJump(session, myOnFinish)
             }
-            tryGetLinesToJump(session, myOnFinish)
+            return currentJumpResult
         }
-        return currentJumpResult
     }
 
     companion object {
-        private val servicesCollection = WeakHashMap<DebuggerSession, JumpService>()
+        private val servicesCollection = WeakHashMap<Project, JumpService>()
 
-        fun getJumpService(session: DebuggerSession): JumpService = synchronized(servicesCollection) {
-            servicesCollection.getOrPut(session) {
-                JumpService(session, CommonTypeResolver(session.project))
+        fun getJumpService(project: Project): JumpService = synchronized(servicesCollection) {
+            servicesCollection.getOrPut(project) {
+                JumpService(CommonTypeResolver(project))
             }
         }
     }

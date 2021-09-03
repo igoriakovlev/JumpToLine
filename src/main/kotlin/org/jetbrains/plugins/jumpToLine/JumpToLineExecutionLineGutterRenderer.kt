@@ -11,21 +11,14 @@ import com.intellij.openapi.editor.markup.GutterDraggableObject
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.IconLoader
-import com.intellij.xdebugger.impl.XDebugSessionImpl
+import com.intellij.xdebugger.XDebuggerManager
 import javax.swing.Icon
 
-internal class JumpToLineExecutionLineGutterRenderer(
-    private val session: DebuggerSession,
-    private val xsession: XDebugSessionImpl,
-    project: Project,
-    jumpService: JumpService
-) : GutterIconRenderer(), GutterMark {
+internal class JumpToLineExecutionLineGutterRenderer(private val project: Project) : GutterIconRenderer(), GutterMark {
 
-    fun update() {
-        synchronized(session) {
-            canJump = checkCanJump(session, xsession)
-            gutter.reset()
-        }
+    fun update(session: DebuggerSession) {
+        canJump = checkCanJump(session)
+        gutter.reset(session)
     }
 
     override fun hashCode(): Int = 0
@@ -43,13 +36,13 @@ internal class JumpToLineExecutionLineGutterRenderer(
     override fun getAlignment(): Alignment = Alignment.LEFT
 
     override fun getDraggableObject(): GutterDraggableObject?
-        = if (canJump.first && xsession.currentPosition != null) gutter else null
+        = if (canJump.first && XDebuggerManager.getInstance(project).currentSession?.currentPosition != null) gutter else null
 
     override fun isNavigateAction(): Boolean = canJump.first
 
-    override fun getTooltipText(): String? = canJump.second
+    override fun getTooltipText(): String = canJump.second
 
-    private val gutter = JumpToLineArrowGutter(project, session, jumpService)
+    private val gutter = JumpToLineArrowGutter(project)
 
     private var canJump: Pair<Boolean, String> = false to ""
 }

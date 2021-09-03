@@ -5,39 +5,45 @@
 
 package org.jetbrains.plugins.jumpToLine
 
+import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.impl.DebuggerSession
+import com.intellij.xdebugger.XDebugSession
 import com.intellij.xdebugger.XDebugSessionListener
-import com.intellij.xdebugger.impl.XDebugSessionImpl
+import com.intellij.xdebugger.XDebuggerManagerListener
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
 
+internal class JumpToLineDebuggerManagerListener(
+    private val renderer: JumpToLineExecutionLineGutterRenderer,
+    private val highlighter: ExecutionPointHighlighter
+) : XDebuggerManagerListener {
+    override fun currentSessionChanged(previousSession: XDebugSession?, currentSession: XDebugSession?) {
+        if (previousSession != null) {
+            highlighter.hide()
+        }
+        val debuggerSession = (currentSession?.debugProcess as? JavaDebugProcess)?.debuggerSession ?: return
+        val position = currentSession.currentPosition ?: return
+        renderer.update(debuggerSession)
+        highlighter.show(position, false, renderer)
+    }
+}
+
 internal class JumpToLineSessionEventHandler(
-    session: DebuggerSession,
-    private val xsession: XDebugSessionImpl,
-    jumpService: JumpService
+    private val debuggerSession: DebuggerSession,
+    private val renderer: JumpToLineExecutionLineGutterRenderer,
+    private val highlighter: ExecutionPointHighlighter
 ) : XDebugSessionListener {
 
-    private val project = session.project
-
-    private val renderer = JumpToLineExecutionLineGutterRenderer(session, xsession, project, jumpService)
-    private val executionPointHighlighter = ExecutionPointHighlighter(project)
-
     override fun sessionPaused() {
-        renderer.update()
-
-        val currentPosition = xsession.currentPosition ?: return
-        executionPointHighlighter.show(
-            currentPosition,
-            xsession.isTopFrameSelected,
-            renderer
-        )
-        xsession.updateExecutionPosition()
+        val position = debuggerSession.xDebugSession?.currentPosition ?: return
+        renderer.update(debuggerSession)
+        highlighter.show(position, false, renderer)
     }
 
     override fun sessionResumed() {
-        executionPointHighlighter.hide()
+        highlighter.hide()
     }
 
     override fun sessionStopped() {
-        executionPointHighlighter.hide()
+        highlighter.hide()
     }
 }

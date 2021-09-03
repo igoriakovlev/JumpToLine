@@ -5,9 +5,9 @@
 
 package org.jetbrains.plugins.jumpToLine
 
+import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.ex.EditorGutterComponentEx
@@ -25,6 +25,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
 import com.intellij.ui.JBColor
+import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.xdebugger.ui.DebuggerColors
 import com.intellij.xdebugger.ui.DebuggerColors.EXECUTION_LINE_HIGHLIGHTERLAYER
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineInfo
@@ -35,46 +36,36 @@ import java.awt.Cursor
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
 
-internal class JumpToLineArrowGutter(
-        private val project: Project,
-        private val session: DebuggerSession,
-        private val jumpService: JumpService
-): GutterDraggableObject {
+internal class JumpToLineArrowGutter(private val project: Project): GutterDraggableObject {
 
-    private var highlighters: List<RangeHighlighter>? = null
+    private val sync = Any()
+    private var highlighters: List<Pair<MarkupModel, RangeHighlighter>>? = null
     private var highlightersIsForGoto: Boolean = false
 
-    private var documentCached: Document? = null
-    private val document: Document? get() {
-        if (documentCached != null) return documentCached
-        documentCached = session.xDebugSession
-                ?.currentPosition
-                ?.file
-                ?.let { PsiManager.getInstance(project).findFile(it) }
-                ?.let { PsiDocumentManager.getInstance(project).getDocument(it) }
-        return documentCached
-    }
+    private val markupModel: MarkupModel? get() =
+        currentPosition
+            ?.let { PsiManager.getInstance(project).findFile(it.file) }
+            ?.let { PsiDocumentManager.getInstance(project).getDocument(it) }
+            ?.let { DocumentMarkupModel.forDocument(it, project, true) }
 
-    private var markupModelCached: MarkupModel? = null
-    private val markupModel: MarkupModel? get() {
-        if (markupModelCached != null) return markupModelCached
-
-        markupModelCached = document?.let { DocumentMarkupModel.forDocument(it, project, true) }
-        return markupModelCached
-    }
-
-    private val currentDocumentLine get() = session.xDebugSession?.currentPosition?.line
+    private val currentPosition get() =
+        XDebuggerManager.getInstance(project).currentSession?.currentPosition
 
     override fun copy(line: Int, file: VirtualFile?, actionId: Int): Boolean {
-
         reSetterByMouseLeave.remove()
         resetHighlighters()
-        if (line == currentDocumentLine) return false
+
+        val currentSession = XDebuggerManager.getInstance(project).currentSession ?: return false
+        val currentLine = currentSession.currentPosition?.line ?: return false
+        if (line == currentLine) return false
 
         val sourceLine = line + 1
 
-        return if (actionId == 1) !jumpService.tryGotoLine(sourceLine)
-        else !jumpService.tryJumpToLine(sourceLine)
+        val debugSession = (currentSession.debugProcess as? JavaDebugProcess)?.debuggerSession ?: return false
+        val jumpService = JumpService.getJumpService(project)
+
+        return if (actionId == 1) !jumpService.tryGotoLine(sourceLine, debugSession)
+        else !jumpService.tryJumpToLine(sourceLine, debugSession)
     }
 
     companion object {
@@ -95,39 +86,34 @@ internal class JumpToLineArrowGutter(
     }
 
     private fun resetHighlighters() {
+        val currentHighlighters = synchronized(sync) {
+            highlighters?.also {
+                highlighters = null
+            }
+        } ?: return
 
-        if (highlighters == null) return
-
-        synchronized(session) {
-            val currentHighlighters = highlighters ?: return
-            highlighters = null
-
-            val application = ApplicationManager.getApplication()
-            application.invokeLater {
-                application.runWriteAction {
-                    currentHighlighters.forEach {
-                        markupModel?.removeHighlighter(it)
-                    }
-                }
+        ApplicationManager.getApplication().invokeLater {
+            currentHighlighters.forEach {
+                it.first.removeHighlighter(it.second)
             }
         }
     }
 
     private fun MarkupModel.isValidLine(line: LineInfo) =
-        line.documentLine.let { it >= 0 && it < document.lineCount && it != currentDocumentLine }
+        line.documentLine.let { it >= 0 && it < document.lineCount && it != currentPosition?.line }
 
     private val LineInfo.documentLine get() = sourceLine - 1
 
     private fun updateHighlightersForJump(
         currentJumpInfo: JumpLinesInfo,
         markupModel: MarkupModel
-    ): List<RangeHighlighter>? {
+    ): List<Pair<MarkupModel, RangeHighlighter>>? {
 
         val jumpAnalyzeInfo = currentJumpInfo.jumpAnalyzeResult
         val firstLine = currentJumpInfo.firstLine
         if (jumpAnalyzeInfo == null && firstLine == null) return null
 
-        val jumpHighlighters = mutableListOf<RangeHighlighter>()
+        val jumpHighlighters = mutableListOf<Pair<MarkupModel, RangeHighlighter>>()
         var yellowLineAdded = false
 
         if (jumpAnalyzeInfo != null) {
@@ -153,7 +139,7 @@ internal class JumpToLineArrowGutter(
                 yellowLineAdded = yellowLineAdded || currentSafeStatus == LineSafetyStatus.NotSafe
 
                 val highlighter = markupModel.addLineHighlighter(lineToSet, EXECUTION_LINE_HIGHLIGHTERLAYER, attributes)
-                jumpHighlighters.add(highlighter)
+                jumpHighlighters.add(markupModel to highlighter)
             }
         }
 
@@ -167,9 +153,8 @@ internal class JumpToLineArrowGutter(
         }
 
         if (firstLine != null) {
-            jumpHighlighters.add(
-                markupModel.addLineHighlighter(firstLine.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
-            )
+            val firstLineHighlighter = markupModel.addLineHighlighter(firstLine.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+            jumpHighlighters.add(markupModel to firstLineHighlighter)
         }
 
         return jumpHighlighters
@@ -178,9 +163,9 @@ internal class JumpToLineArrowGutter(
     private fun updateHighlightersForGoTo(
         currentJumpInfo: JumpLinesInfo,
         markupModel: MarkupModel
-    ): List<RangeHighlighter> = currentJumpInfo.linesToGoto.mapNotNull { line ->
+    ): List<Pair<MarkupModel, RangeHighlighter>> = currentJumpInfo.linesToGoto.mapNotNull { line ->
             markupModel.isValidLine(line).onTrue {
-                markupModel.addLineHighlighter(line.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
+                markupModel to markupModel.addLineHighlighter(line.documentLine, EXECUTION_LINE_HIGHLIGHTERLAYER, safeLineAttribute)
             }
         }
 
@@ -191,9 +176,13 @@ internal class JumpToLineArrowGutter(
         resetHighlighters()
 
         val markupModel = markupModel ?: return
-        val currentJumpInfo = jumpService.tryGetJumpInfo() ?: return
 
-        synchronized(session) {
+        val session = (XDebuggerManager.getInstance(project).currentSession?.debugProcess as? JavaDebugProcess)
+            ?.debuggerSession ?: return
+
+        val currentJumpInfo = JumpService.getJumpService(project).tryGetJumpInfo(session) ?: return
+
+        synchronized(sync) {
             if (highlighters != null) return
             highlighters = if (highlightersIsForGoto) updateHighlightersForGoTo(currentJumpInfo, markupModel)
             else updateHighlightersForJump(currentJumpInfo, markupModel)
@@ -214,10 +203,12 @@ internal class JumpToLineArrowGutter(
 
             if (installedGutterComponent?.mouseListeners?.contains(this) == true) return
 
-            val editor = session.xDebugSession
-                    ?.currentPosition
-                    ?.file
-                    ?.let { FileEditorManager.getInstance(project).getSelectedEditor(it) }
+
+            val editor = XDebuggerManager.getInstance(project)
+                .currentSession
+                ?.currentPosition
+                ?.file
+                ?.let { FileEditorManager.getInstance(project).getSelectedEditor(it) }
 
             installedGutterComponent =
                     editor.castSafelyTo<TextEditor>()
@@ -249,12 +240,11 @@ internal class JumpToLineArrowGutter(
         return if (highlighters == null) WaitCursor else DefaultCursor
     }
 
-    fun reset() {
-        resetHighlighters()
-        jumpService.reset()
-        markupModelCached = null
-        documentCached = null
-        reSetterByMouseLeave.remove()
+    fun reset(session: DebuggerSession) {
+        synchronized(sync) {
+            resetHighlighters()
+            JumpService.getJumpService(project).reset(session)
+            reSetterByMouseLeave.remove()
+        }
     }
-
 }
