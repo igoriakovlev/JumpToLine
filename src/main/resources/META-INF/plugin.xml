@@ -18,6 +18,9 @@
   </description>
 
   <change-notes><![CDATA[
+  <p><h2>0.1.8</h2></p>
+  <p>Update until version to 221 idea</p>
+  <p>Multisession debugging support</p>
   <p><h2>0.1.7</h2></p>
   <p>Update until version to 213 idea</p>
   <p><h2>0.1.6</h2></p>
