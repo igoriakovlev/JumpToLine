@@ -24,8 +24,8 @@ internal class JumpToLineExecutionLineGutterRenderer(private val project: Projec
     override fun hashCode(): Int = 0
 
     companion object {
-        val jumpOkIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatement.svg", this.javaClass)
-        val jumpFailIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatementFail.svg", this.javaClass)
+        val jumpOkIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatement.svg", this::class.java)
+        val jumpFailIcon: Icon get() = IconLoader.getIcon("/org/jetbrains/plugins/jumpToLine/nextStatementFail.svg", this::class.java)
     }
 
     override fun getIcon(): Icon =

@@ -100,7 +100,7 @@ private fun checkIsTopMethodRecursive(location: Location, threadProxy: ThreadRef
 
     val topMethodName = location.stringifyMethod()
 
-    return threadProxy.threadGroupProxy().threads().sumBy { thread ->
+    return threadProxy.threadGroupProxy().threads().sumOf { thread ->
         thread.frames().count { frame -> topMethodName == frame.location().stringifyMethod()  }
     } > 1
 }
@@ -172,8 +172,9 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
                 }
             }
 
-    val firstJavaLine = javaLines.minBy { it }
-    val firstLine = linesToGoto.firstOrNull { it.javaLine == firstJavaLine }
+    val firstLine = javaLines.minOrNull()?.let { firstJavaLine ->
+        linesToGoto.firstOrNull { it.javaLine == firstJavaLine }
+    }
 
     val jumpOnLineAvailable = !method.isConstructor &&
             !checkIsTopMethodRecursive(location, threadProxy) &&

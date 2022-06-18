@@ -133,7 +133,7 @@ internal class LocalVariableAnalyzer private constructor(
 
     private val analyzeResult: JumpAnalyzeResult get() {
 
-        val methodLocalsCount = semiResult.maxBy { it.value.locals.size }?.value?.locals?.size ?: 0
+        val methodLocalsCount = semiResult.maxOfOrNull { it.value.locals.size } ?: 0
 
         val analyzeTargets = mutableListOf<JumpAnalyzeTarget>()
 

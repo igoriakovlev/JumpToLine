@@ -179,8 +179,8 @@ internal fun jumpByRunToLine(
     val method = currentFrame().location().method()
 
     val runToLocation = method.locationsOfLine(line)
-            ?.minBy { it.codeIndex() }
-            ?: returnByExceptionWithLog("Cannot find line location for RunTo")
+        ?.minByOrNull { it.codeIndex() }
+        ?: returnByExceptionWithLog("Cannot find line location for RunTo")
 
     val codeLocation = currentFrame().location()
 

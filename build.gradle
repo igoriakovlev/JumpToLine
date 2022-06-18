@@ -1,7 +1,7 @@
 plugins {
   id 'java'
-  id "org.jetbrains.intellij" version "0.4.18"
-  id 'org.jetbrains.kotlin.jvm' version '1.4.32'
+  id "org.jetbrains.intellij" version "1.6.0"
+  id "org.jetbrains.kotlin.jvm" version "1.7.0"
 }
 
 repositories {
@@ -9,22 +9,21 @@ repositories {
 }
 
 dependencies {
-  testCompile group: 'junit', name: 'junit', version: '4.12'
-  runtime files("${System.properties['java.home']}/lib/tools.jar")
-  runtime files("${System.properties['java.home']}/lib/sa-jdi.jar")
+  testImplementation group: 'junit', name: 'junit', version: '4.12'
+  runtimeOnly files("${System.properties['java.home']}/lib/tools.jar")
+  runtimeOnly files("${System.properties['java.home']}/lib/sa-jdi.jar")
   // https://mvnrepository.com/artifact/org.ow2.asm/asm
-  compile group: 'org.ow2.asm', name: 'asm', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm', version: '8.0.1'
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-commons
-  compile group: 'org.ow2.asm', name: 'asm-commons', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm-commons', version: '8.0.1'
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-util
-  compile group: 'org.ow2.asm', name: 'asm-util', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm-util', version: '8.0.1'
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-  // Define IntelliJ Platform API version to use for building this plugin
-  version '2020.2'
-  plugins 'java'
+  version.set("2022.1.1")
+  plugins = ["java"]
 }
 
 patchPluginXml {

@@ -65,7 +65,6 @@ internal fun getAvailableJumpLines(
             jumpFromJavaLine = jumpFromJavaLine,
             addFirstLine = analyzeFirstLine
     ) ?: return null
-8
 
 //    val stackAnalyzerResult =
 //            StackEmptyLocatorAnalyzer.analyze(classReader, targetMethod, ownerTypeName, lineTranslator, analyzeFirstLine)

@@ -1,10 +1,8 @@
 package org.jetbrains.plugins.jumpToLine
 
 import com.intellij.debugger.engine.JavaDebugProcess
-import com.intellij.debugger.ui.JavaDebuggerSupport
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
@@ -64,19 +62,6 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
     }
 }
 
-private class DummyActionHandler : DebuggerActionHandler() {
-
-    companion object {
-        val INSTANCE = DummyActionHandler()
-    }
-
-    override fun perform(project: Project, event: AnActionEvent) = Unit
-
-    override fun isEnabled(project: Project, event: AnActionEvent) = false
-
-    override fun isHidden(project: Project, event: AnActionEvent?) = true
-}
-
 class JumpToStatementAction : XDebuggerActionBase(true) {
     
     override fun isEnabled(e: AnActionEvent?): Boolean {
@@ -86,6 +71,5 @@ class JumpToStatementAction : XDebuggerActionBase(true) {
 
     private val handler = JumpToStatementHandler()
 
-    override fun getHandler(debuggerSupport: DebuggerSupport): DebuggerActionHandler =
-        if (debuggerSupport is JavaDebuggerSupport) handler else DummyActionHandler.INSTANCE
+    override fun getHandler(debuggerSupport: DebuggerSupport): DebuggerActionHandler = handler
 }
