@@ -13,11 +13,11 @@ dependencies {
   runtimeOnly files("${System.properties['java.home']}/lib/tools.jar")
   runtimeOnly files("${System.properties['java.home']}/lib/sa-jdi.jar")
   // https://mvnrepository.com/artifact/org.ow2.asm/asm
-  implementation group: 'org.ow2.asm', name: 'asm', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm', version: '9.4'
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-commons
-  implementation group: 'org.ow2.asm', name: 'asm-commons', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm-commons', version: '9.4'
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-util
-  implementation group: 'org.ow2.asm', name: 'asm-util', version: '8.0.1'
+  implementation group: 'org.ow2.asm', name: 'asm-util', version: '9.4'
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
