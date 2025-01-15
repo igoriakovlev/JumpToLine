@@ -18,6 +18,12 @@
   </description>
 
   <change-notes><![CDATA[
+  <p><h2>0.1.18</h2></p>
+  <p>Update supported ASM version to ASM9</p>
+  <p>Remove deprecated IJ API usages</p>
+  <p>Fix jump to line for IJ 251</p>
+  <p>Update until version to 251 idea</p>
+  <p>Update infrastructure</p>
   <p><h2>0.1.17</h2></p>
   <p>Update until version to 243 idea</p>
   <p><h2>0.1.16</h2></p>
