@@ -17,7 +17,6 @@ import com.sun.jdi.request.EventRequestManager
 import com.sun.jdi.request.StepRequest
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 
-
 /**
  * JRE Stepping bug patch after class redefinition
  * SHOULD be called on location with different method other from redefinition method
@@ -36,7 +35,6 @@ internal fun debuggerJump(
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver,
         process: DebugProcessImpl,
-        suspendContext: SuspendContextImpl,
         onFinish: (Boolean) -> Unit
 ) {
     fun currentFrame() = threadProxy.frame(0)
@@ -96,8 +94,7 @@ internal fun debuggerJump(
                 .filter { it.second !== null }
     }
 
-    val popFrameCommand = process.createPopFrameCommand(process.debuggerContext, suspendContext.frameProxy) as DebuggerContextCommandImpl
-    popFrameCommand.threadAction(suspendContext)
+    threadProxy.popFrames(currentFrame())
 
     jreSteppingBugPatch(machine.eventRequestManager(), threadProxy.threadReference)
 

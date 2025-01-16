@@ -237,7 +237,6 @@ internal fun tryJumpToSelectedLine(
                         jumpAnalyzeTarget = jumpAnalyzeTarget,
                         jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
                         commonTypeResolver = commonTypeResolver,
-                        suspendContext = suspendContext,
                         onFinish = loggedFinish
                 )
             }
@@ -303,7 +302,6 @@ private fun tryJumpToSelectedLineImpl(
         jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
-        suspendContext: SuspendContextImpl,
         onFinish: (Boolean) -> Unit
 ) {
     val process = session.process
@@ -331,7 +329,6 @@ private fun tryJumpToSelectedLineImpl(
             threadProxy = threadProxy,
             commonTypeResolver = commonTypeResolver,
             process = process,
-            suspendContext = suspendContext,
             onFinish = onFinish
     )
 }
