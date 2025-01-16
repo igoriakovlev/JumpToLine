@@ -6,7 +6,6 @@ import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.messages.MessageDialog
 import com.intellij.openapi.wm.ToolWindowId
 import com.intellij.openapi.wm.ToolWindowManager
-import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
 import org.jetbrains.plugins.jumpToLine.injectionUtils.JumpAnalyzeTarget
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineInfo
 import org.jetbrains.plugins.jumpToLine.injectionUtils.LineSafetyStatus
@@ -126,16 +125,12 @@ internal class JumpService(private val commonTypeResolver: CommonTypeResolver) {
                     synchronized(sync) {
                         currentJumpResult = result ?: UnknownErrorResult
                         loadIsInProgress = false
-                        FUSLogger.log(
-                            event = FUSLogger.JumpToLineEvent.GetLinesToJump,
-                            status = if (result != null) FUSLogger.JumpToLineStatus.Success else FUSLogger.JumpToLineStatus.Success
-                        )
                     }
                     onFinish()
                 }
                 tryGetLinesToJump(session, myOnFinish)
             }
-            return currentJumpResult
+            return currentJumpResult as? JumpLinesInfo
         }
     }
 

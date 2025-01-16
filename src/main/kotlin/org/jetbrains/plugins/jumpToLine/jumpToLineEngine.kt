@@ -17,8 +17,6 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
 import com.sun.jdi.Method
-import org.jetbrains.plugins.jumpToLine.fus.FUSLogger
-import org.jetbrains.plugins.jumpToLine.fus.FUSLogger.JumpToLineEvent.*
 import org.jetbrains.plugins.jumpToLine.injectionUtils.*
 
 private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T? {
@@ -28,7 +26,7 @@ private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T
             result = body()
         }
         catch(e : Exception) {
-            e.logException();
+            e.logException()
         }
     }
     return result
@@ -38,7 +36,7 @@ private fun <T> runInDebuggerThread(session: DebuggerSession, body: () -> T?): T
 internal val Method.methodName get() = MethodName(name(), signature(), genericSignature())
 
 internal fun checkCanJump(session: DebuggerSession) =
-        runInDebuggerThread(session) { checkCanJumpImpl(session) } ?: false to UNKNOWN_ERROR0
+    runInDebuggerThread(session) { checkCanJumpImpl(session) } ?: (false to UNKNOWN_ERROR0)
 
 private const val NOT_SUSPENDED = "Process is not suspended"
 private const val MAIN_FUNCTION_CALL = "Jump to line is not available for the main function"
@@ -55,6 +53,9 @@ private const val UNKNOWN_ERROR3 = "Unexpected jump error (#3)"
 private val coroutineRegex = "\\(Lkotlin/coroutines/Continuation;.*?\\)Ljava/lang/Object;".toRegex()
 
 private fun checkCanJumpImpl(session: DebuggerSession): Pair<Boolean, String> {
+    if (!session.isPaused)
+        return false to NOT_SUSPENDED
+
     val process = session.process
     val xSession = session.xDebugSession as? XDebugSessionImpl ?: return false to UNKNOWN_ERROR3
 
@@ -203,17 +204,6 @@ private fun tryGetLinesToJumpImpl(session: DebuggerSession, onFinish: (GetLinesT
     }
 }
 
-private fun loggedOnFinish(
-        unLoggedFinish: () -> Unit,
-        event: FUSLogger.JumpToLineEvent
-): (Boolean) -> Unit = { success: Boolean ->
-    FUSLogger.log(
-        event = event,
-        status = if (success) FUSLogger.JumpToLineStatus.Success else FUSLogger.JumpToLineStatus.Failed
-    )
-    unLoggedFinish()
-}
-
 internal fun tryJumpToSelectedLine(
         session: DebuggerSession,
         jumpAnalyzeTarget: JumpAnalyzeTarget,
@@ -225,19 +215,14 @@ internal fun tryJumpToSelectedLine(
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
 
-            val loggedFinish = loggedOnFinish(
-                    unLoggedFinish = onFinish,
-                    event = if (jumpAnalyzeTarget.safeStatus != LineSafetyStatus.NotSafe) JumpToGreenLine else JumpToYellowLine
-            )
-
-            finishOnException(loggedFinish) {
+            finishOnException(onFinish) {
                 tryJumpToSelectedLineImpl(
                         session = session,
                         classFile = classFile,
                         jumpAnalyzeTarget = jumpAnalyzeTarget,
                         jumpAnalyzeAdditionalInfo = jumpAnalyzeAdditionalInfo,
                         commonTypeResolver = commonTypeResolver,
-                        onFinish = loggedFinish
+                        onFinish = onFinish
                 )
             }
         }
@@ -252,17 +237,12 @@ internal fun tryJumpToByGoto(
 ) {
     val command = object : DebuggerContextCommandImpl(session.contextManager.context) {
         override fun threadAction(suspendContext: SuspendContextImpl) {
-            val loggedFinish = loggedOnFinish(
-                    unLoggedFinish = onFinish,
-                    event = GoToLine
-            )
-
-            finishOnException(loggedFinish) {
+            finishOnException(onFinish) {
                 jumpByRunToLineImpl(
                         session = session,
                         suspendContext = suspendContext,
                         line = line,
-                        onFinish = loggedFinish
+                        onFinish = onFinish
                 )
             }
         }
@@ -274,7 +254,7 @@ private fun jumpByRunToLineImpl(
         session: DebuggerSession,
         suspendContext: SuspendContextImpl,
         line: Int,
-        onFinish: (Boolean) -> Unit
+        onFinish: () -> Unit
 ) {
 
     val process = session.process
@@ -293,7 +273,6 @@ private fun jumpByRunToLineImpl(
             line = line,
             onFinish = onFinish
     )
-
 }
 
 private fun tryJumpToSelectedLineImpl(
@@ -302,7 +281,7 @@ private fun tryJumpToSelectedLineImpl(
         jumpAnalyzeAdditionalInfo: JumpAnalyzeAdditionalInfo,
         classFile: ByteArray?,
         commonTypeResolver: CommonTypeResolver,
-        onFinish: (Boolean) -> Unit
+        onFinish: () -> Unit
 ) {
     val process = session.process
 

@@ -20,7 +20,7 @@ internal class InstrumentationMethodBreakpoint(
         private val thread: ThreadReferenceProxyImpl,
         private val location: Location,
         private val stopAfterAction: Boolean,
-        private val onFinish: (Boolean) -> Unit,
+        private val onFinish: () -> Unit,
         private val action: () -> Unit
 ) : SyntheticLineBreakpoint(process.project) {
 
@@ -32,7 +32,7 @@ internal class InstrumentationMethodBreakpoint(
     override fun createRequest(debugProcess: DebugProcessImpl) {
         debugProcess.requestsManager.run {
             enableRequest(createBreakpointRequest(this@InstrumentationMethodBreakpoint, location).also {
-                filterThread = thread.threadReference
+                it.addThreadFilter(thread.threadReference)
             })
         }
     }

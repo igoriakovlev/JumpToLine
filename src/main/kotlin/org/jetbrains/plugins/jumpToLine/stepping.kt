@@ -35,7 +35,7 @@ internal fun debuggerJump(
         threadProxy: ThreadReferenceProxyImpl,
         commonTypeResolver: CommonTypeResolver,
         process: DebugProcessImpl,
-        onFinish: (Boolean) -> Unit
+        onFinish: () -> Unit
 ) {
     fun currentFrame() = threadProxy.frame(0)
 
@@ -102,13 +102,13 @@ internal fun debuggerJump(
     process.onHotSwapFinished()
 
     val newMethod = declaredType.concreteMethodByName(methodName.name, methodName.signature)
-            ?: returnByExceptionWithLog("Cannot find refurbished method with given name and signature")
+        ?: returnByExceptionWithLog("Cannot find refurbished method with given name and signature")
 
     val stopPreloadLocation = newMethod.locationOfCodeIndex(prefixUpdateResult.jumpSwitchBytecodeOffset)
-            ?: returnByExceptionWithLog("Cannot find first stop location")
+        ?: returnByExceptionWithLog("Cannot find first stop location")
 
     val targetLocation = newMethod.locationOfCodeIndex(prefixUpdateResult.jumpTargetBytecodeOffset)
-            ?: returnByExceptionWithLog("Cannot find target location")
+        ?: returnByExceptionWithLog("Cannot find target location")
 
     fun StackFrame.trySetValue(description: VariableDescription, value: Value) {
         val variable = visibleVariableByName(description.name) ?: return
@@ -125,10 +125,10 @@ internal fun debuggerJump(
         }
 
         fun ThreadReferenceProxyImpl.forceFramesAndGetFirst() = forceFrames()
-                .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
+            .firstOrNull()?.stackFrame?: nullWithLog<StackFrame>("Failed to get refreshed stack frame")
 
         val stackSwitchFrame = threadProxy.forceFramesAndGetFirst()
-                ?: resumeBreakpointsAndThrow("Failed to get frame on stack")
+            ?: resumeBreakpointsAndThrow("Failed to get frame on stack")
 
         val jumpVariable = stackSwitchFrame.visibleVariableByName(jumpSwitchVariableName)
         stackSwitchFrame.setValue(jumpVariable, machine.mirrorOf(1))
@@ -154,7 +154,7 @@ internal fun debuggerJump(
             }
 
             process.resumeBreakpoints()
-            onFinish(true)
+            onFinish()
         }
     }
 
@@ -170,7 +170,7 @@ internal fun jumpByRunToLine(
         suspendContext: SuspendContextImpl,
         threadProxy: ThreadReferenceProxyImpl,
         line: Int,
-        onFinish: (Boolean) -> Unit)
+        onFinish: () -> Unit)
 {
     fun currentFrame() = threadProxy.frame(0)
     val method = currentFrame().location().method()
@@ -190,9 +190,9 @@ internal fun jumpByRunToLine(
     process.setSteppingBreakpoint(steppingBreakpoint)
     process.requestsManager.run {
         enableRequest(createBreakpointRequest(steppingBreakpoint, runToLocation).also {
-            filterThread = threadProxy.threadReference
+            it.addThreadFilter(threadProxy.threadReference)
         })
     }
     process.suspendManager.resume(process.suspendManager.pausedContext)
-    onFinish(true)
+    onFinish()
 }

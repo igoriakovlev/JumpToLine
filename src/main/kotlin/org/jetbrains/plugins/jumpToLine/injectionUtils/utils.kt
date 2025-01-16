@@ -20,11 +20,11 @@ private val logger = Logger.getInstance("JumpToLine Plugin")
 
 internal class ReturnLikeException : Exception()
 
-inline fun finishOnException(onFinish: (Boolean) -> Unit, body: () -> Unit) {
+inline fun finishOnException(onFinish: () -> Unit, body: () -> Unit) {
     try {
         body()
     } catch (e: Throwable) {
-        onFinish(false)
+        onFinish()
         if (e !is ReturnLikeException) throw e
     }
 }

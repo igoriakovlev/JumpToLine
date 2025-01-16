@@ -63,9 +63,8 @@ private class JumpToStatementHandler : XDebuggerSuspendedActionHandler() {
 }
 
 class JumpToStatementAction : XDebuggerActionBase(true) {
-    
-    override fun isEnabled(e: AnActionEvent?): Boolean {
-        val project = e?.project ?: return false
+    override fun isEnabled(e: AnActionEvent): Boolean {
+        val project = e.project ?: return false
         return XDebuggerManager.getInstance(project).currentSession?.isSuspended ?: false
     }
 

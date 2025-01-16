@@ -144,7 +144,7 @@ internal class JumpToLineArrowGutter(private val project: Project): GutterDragga
         }
 
 
-        if (jumpHighlighters.size == 0 || yellowLineAdded) {
+        if (jumpHighlighters.isEmpty() || yellowLineAdded) {
             ToolWindowManager.getInstance(project).notifyByBalloon(
                     ToolWindowId.DEBUG,
                     MessageType.INFO,
@@ -234,7 +234,7 @@ internal class JumpToLineArrowGutter(private val project: Project): GutterDragga
         override fun mousePressed(e: MouseEvent?) {}
     }
 
-    override fun getCursor(line: Int, actionId: Int): Cursor {
+    override fun getCursor(line: Int, file: VirtualFile?, actionId: Int): Cursor? {
         if (actionId != 1 && actionId != 2) return DefaultCursor
         updateHighlighters(actionId == 1)
         return if (highlighters == null) WaitCursor else DefaultCursor

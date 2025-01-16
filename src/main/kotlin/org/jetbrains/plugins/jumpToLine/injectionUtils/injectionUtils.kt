@@ -127,7 +127,7 @@ internal fun updateClassWithGotoLinePrefix(
 
     try {
         classReaderToWrite.accept(transformer, EXPAND_FRAMES)
-    } catch(e: TypeResolveError) {
+    } catch(_: TypeResolveError) {
         return null
     }
 

@@ -9,14 +9,16 @@ import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.impl.DebuggerManagerListener
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.xdebugger.impl.ui.ExecutionPointHighlighter
 
-class JumpToLineStartupActivity : StartupActivity {
-    override fun runActivity(project: Project) {
+class JumpToLineStartupActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
         val renderer = JumpToLineExecutionLineGutterRenderer(project)
-        val executionPointHighlighter = ExecutionPointHighlighter(project)
+
+        val projectConnection = project.messageBus.connect()
+        val executionPointHighlighter = ExecutionPointHighlighter(project, projectConnection)
 
         val debuggerListener = object : DebuggerManagerListener {
             override fun sessionAttached(session: DebuggerSession?) {
@@ -28,9 +30,10 @@ class JumpToLineStartupActivity : StartupActivity {
                 xSession.addSessionListener(sessionHandler)
             }
         }
-        project.messageBus.connect().subscribe(DebuggerManagerListener.TOPIC, debuggerListener)
+
+        projectConnection.subscribe(DebuggerManagerListener.TOPIC, debuggerListener)
 
         val debuggerManagerListener = JumpToLineDebuggerManagerListener(renderer, executionPointHighlighter)
-        project.messageBus.connect().subscribe(XDebuggerManager.TOPIC, debuggerManagerListener)
+        projectConnection.subscribe(XDebuggerManager.TOPIC, debuggerManagerListener)
     }
 }
