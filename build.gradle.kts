@@ -20,11 +20,11 @@ dependencies {
   runtimeOnly(files("${System.getProperty("java.home")}/lib/sa-jdi.jar"))
 
   // https://mvnrepository.com/artifact/org.ow2.asm/asm
-  implementation("org.ow2.asm:asm:9.4")
+  implementation("org.ow2.asm:asm:9.7.1")
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-commons
-  implementation("org.ow2.asm:asm-commons:9.4")
+  implementation("org.ow2.asm:asm-commons:9.7.1")
   // https://mvnrepository.com/artifact/org.ow2.asm/asm-util
-  implementation("org.ow2.asm:asm-util:9.4")
+  implementation("org.ow2.asm:asm-util:9.7.1")
 }
 
 // Configure Gradle IntelliJ Plugin

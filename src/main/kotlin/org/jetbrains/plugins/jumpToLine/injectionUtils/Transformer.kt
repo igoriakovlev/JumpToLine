@@ -15,7 +15,7 @@ internal class Transformer(
         private val methodName: MethodName,
         private val argumentsCount: Int,
         visitor: ClassVisitor
-) : ClassVisitor7(visitor) {
+) : ClassVisitor9(visitor) {
 
     private var methodVisited = false
     private var methodVisitedTwice = false

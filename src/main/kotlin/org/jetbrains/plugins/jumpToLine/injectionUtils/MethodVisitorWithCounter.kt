@@ -9,7 +9,7 @@ import org.objectweb.asm.Handle
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 
-internal abstract class MethodVisitorWithCounter(visitor: MethodVisitor? = null) : MethodVisitor7(visitor) {
+internal abstract class MethodVisitorWithCounter(visitor: MethodVisitor? = null) : MethodVisitor9(visitor) {
 
     var instructionIndex: Long = 0
         private set

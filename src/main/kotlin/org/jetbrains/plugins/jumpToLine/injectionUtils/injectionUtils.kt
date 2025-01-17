@@ -15,9 +15,9 @@ import org.objectweb.asm.*
 import org.objectweb.asm.ClassReader.EXPAND_FRAMES
 
 
-internal abstract class MethodVisitor7(visitor: MethodVisitor? = null) : MethodVisitor(Opcodes.ASM7, visitor)
-internal abstract class ClassVisitor7(visitor: ClassVisitor? = null) : ClassVisitor(Opcodes.ASM7, visitor)
-internal val EMPTY_METHOD_VISITOR = object : MethodVisitor7() {}
+internal abstract class MethodVisitor9(visitor: MethodVisitor? = null) : MethodVisitor(Opcodes.ASM9, visitor)
+internal abstract class ClassVisitor9(visitor: ClassVisitor? = null) : ClassVisitor(Opcodes.ASM9, visitor)
+internal val EMPTY_METHOD_VISITOR = object : MethodVisitor9() {}
 
 internal val String.dotSpacedName get() = replace('/', '.')
 internal val String.slashSpacedName get() = replace('.', '/')

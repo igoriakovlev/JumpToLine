@@ -16,7 +16,7 @@ internal class SingleMethodVisitorForClass(
         private val methodName: MethodName,
         private val ownerTypeName: String,
         private val methodVisitor: SingleMethodAnalyzer)
-    : ClassVisitor7() {
+    : ClassVisitor9() {
 
     private var methodVisited = false
     private var methodVisitedTwice = false
