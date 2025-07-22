@@ -31,7 +31,7 @@ dependencies {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
   intellijPlatform {
-    intellijIdeaCommunity("251.14649-EAP-CANDIDATE-SNAPSHOT", useInstaller = false)
+    intellijIdeaCommunity("2025.1.2")
     bundledPlugin("com.intellij.java")
 //    local("${System.getProperty("user.home")}/Applications/IntelliJ IDEA Community Edition.app")
   }
