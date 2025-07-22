@@ -18,6 +18,10 @@
   </description>
 
   <change-notes><![CDATA[
+  <p><h2>0.1.19</h2></p>
+  <p>Set until build to 252</p>
+  <p>Update platform to 2025.1.2</p>
+  <p>Remove deprecated API usage</p>
   <p><h2>0.1.18</h2></p>
   <p>Update supported ASM version to ASM9</p>
   <p>Remove deprecated IJ API usages</p>
