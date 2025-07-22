@@ -322,7 +322,7 @@ private fun <T : Any> DebugProcessImpl.invokeInManagerThread(f: (DebuggerContext
 
     when {
         DebuggerManagerThreadImpl.isManagerThread() ->
-            managerThread.invoke(command)
+            managerThread.invokeNow(command)
         else ->
             managerThread.invokeAndWait(command)
     }
