@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
   id("java")
   id("org.jetbrains.kotlin.jvm") version "2.1.0"
-  id("org.jetbrains.intellij.platform") version "2.2.1"
+  id("org.jetbrains.intellij.platform") version "2.9.0"
 }
 
 repositories {
@@ -41,7 +41,6 @@ intellijPlatform {
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "251"
-      untilBuild = "252.*"
     }
   }
   buildSearchableOptions = false
