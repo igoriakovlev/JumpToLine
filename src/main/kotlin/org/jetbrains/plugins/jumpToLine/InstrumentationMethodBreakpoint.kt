@@ -37,7 +37,7 @@ internal class InstrumentationMethodBreakpoint(
         }
     }
 
-    override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent): Boolean {
+    override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent?): Boolean {
         finishOnException(onFinish) {
             process.requestsManager.deleteRequest(this)
             action()
