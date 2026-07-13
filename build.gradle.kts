@@ -31,7 +31,7 @@ dependencies {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
   intellijPlatform {
-    intellijIdeaCommunity("2025.1.2")
+    intellijIdea("2026.1.4")
     bundledPlugin("com.intellij.java")
 //    local("${System.getProperty("user.home")}/Applications/IntelliJ IDEA Community Edition.app")
   }
