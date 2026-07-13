@@ -18,6 +18,10 @@
   </description>
 
   <change-notes><![CDATA[
+  <p><h2>0.1.21</h2></p>
+  <p>Update infrastructure</p>
+  <p>Update asm version to 9.10.1</p>
+  <p>Update platform to 2026.1.4</p>
   <p><h2>0.1.20</h2></p>
   <p>Remove until build</p>
   <p><h2>0.1.19</h2></p>
